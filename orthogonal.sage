@@ -1,6 +1,5 @@
 # from tqdm import tqdm
 from sage.rings.padics.precision_error import PrecisionError
-load('orthogonal_manin_trick.sage')
 from multiprocessing import Process, Manager, Pool
 from concurrent import futures
 
@@ -238,45 +237,50 @@ def ApplySingle(A, i, z, check=True):
         substx *= sum(r**k for k in range(M+1))
     return ii, substx
 
-def NewTransform(Finpsinpky):
-    F, Finv, inps, inpky = Finpsinpky
+def NewTransform(F, Finv, inps, inpky):
     res = 1
     for ky, s1, s2, sgn in inps:
         f = F[ky] if sgn == 1 else Finv[ky]
-        S = f.parent()
-        R = S.base_ring()
         if s1 is None:
             continue
         res *= sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
     return inpky, res
 
+def Transform(f, finv, inps, inky):
+    res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
+    for outky, s1, s2, sgn in inps:
+        ff = f if sgn == 1 else finv
+        if s1 is None:
+            continue
+        res[outky] *= sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
+    return inky, res
+
 def Next(F):
-    res = {}
+    res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
     if parallelize:
         with futures.ProcessPoolExecutor() as executor:
             # Calculate inverses
             print('Calculating inverses...')
-            it = [(ky, val) for ky, val in F.items()]
-            future = {executor.submit(inv_par, (ky,val)) : ky for ky, val in it}
+            future = {executor.submit(inv_par, (ky,val)) : ky for ky, val in F.items()}
             Finv = {}
             print('Looking at as_completed')
             for fut in futures.as_completed(future):
                 ky, val = fut.result()
                 print('ky = ',ky)
                 Finv[ky] = val
-                
             # Finv = {ky : val for ky, val in executor.map(inv_par, it,chunksize=len(it))}
 
             # Iteration
             print('Main iteration')
-            it = [(deepcopy(F), deepcopy(Finv), deepcopy(inps), ky) for inps, ky in input_list]
-            res = {}
-            future = {executor.submit(NewTransform, i) : i[-1] for i in it}
+            # res = {}
+            # future_dict = {executor.submit(NewTransform, F, Finv, inps, ky) : ky for inps, ky in input_list}
+            future_dict = {executor.submit(Transform, F[ky], Finv[ky], inps, ky) : ky for inps, ky in input_list}
             print('All submitted now')
-            for fut in futures.as_completed(future):
-                ky, val = fut.result()
-                print('Computed ',ky, future[fut])
-                res[ky] = val
+            for fut in futures.as_completed(future_dict):
+                ky, futres = fut.result()
+                print('Computed ',ky)
+                for outky, val in futres.items():
+                    res[outky] *= val
             # for ky, val in executor.map(NewTransform, it, chunksize=len(it)):
             #     print('Computed ', ky)
             #     res[ky] = val
@@ -291,8 +295,8 @@ def RMC(F):
     FF = F
     res = F
     for j in range(1,M):
-        d2 = max(val.degree() for ky, val in F.items())
-        d1 = max(o.degree() for ky, val in F.items() for o in val.coefficients())
+        # d2 = max(val.degree() for ky, val in F.items())
+        # d1 = max(o.degree() for ky, val in F.items() for o in val.coefficients())
         print(f'Iteration {j}')
         t = walltime()
         FF = Next(FF)
@@ -497,11 +501,8 @@ def calculate_Tp_matrices(P):
             for ky1 in range(p+1):
                 ii, s1pow = apply_single_dict[(m, ky0, 0)]
                 jj, s2pow = apply_single_dict[(m, ky1, 1)]
-                # if s1pow is None:
-                #     s12pow = None
-                # else:
-                #     s12pow = {(r, s) : s1pow[r] * s2pow[s] for r in range(M+1) for s in range(M+1)}
-                aux_dict[(ii,jj)].append(((ky0,ky1), s1pow, s2pow, sgn))
+                # aux_dict[(ii,jj)].append(((ky0,ky1), s1pow, s2pow, sgn))
+                aux_dict[(ky0, ky1)].append(((ii, jj), s1pow, s2pow, sgn))
     return MS, [(inps, ky) for ky, inps in aux_dict.items()]
 
 # given a non-necessary fundamental discriminant D, computes the matrix gamma_tau associated to an optimal embedding of the ring of discriminant D to M_0(2)

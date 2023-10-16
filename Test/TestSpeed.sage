@@ -9,10 +9,10 @@ from util import *
 
 ### Initialize
 p = 5
-M = 50
+M = 20
 parallelize = True
-ncpus = 64
-embedding_idx = 0
+ncpus = 2
+embedding_idx = 1
 
 D = -1
 x = QQ['x'].gen()
