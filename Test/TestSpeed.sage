@@ -8,12 +8,12 @@ from util import *
 # M = 300, parallel: Level1 3910s, Next 16332s, first iteration 17594, second 14447,
 
 ### Initialize
-p = 5
-M = 20
-parallelize = True
-ncpus = 2
-embedding_idx = 1
+# M = 50
+# parallelize = True
+ncpus = 64
+# embedding_idx = 1
 
+p = 5
 D = -1
 x = QQ['x'].gen()
 F.<r> = QuadraticField(D)

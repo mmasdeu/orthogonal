@@ -237,27 +237,31 @@ def ApplySingle(A, i, z, check=True):
         substx *= sum(r**k for k in range(M+1))
     return ii, substx
 
-def NewTransform(F, Finv, inps, inpky):
-    res = 1
-    for ky, s1, s2, sgn in inps:
-        f = F[ky] if sgn == 1 else Finv[ky]
-        if s1 is None:
-            continue
-        res *= sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
-    return inpky, res
 
-def Transform(f, finv, inps, inky):
+TransformPS = lambda f, s1, s2 : sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
+
+def IdxTransform(F, Finv, outky, i):
+    inky, s1, s2, sgn = input_list[outky][i]
+    f = F if sgn == 1 else Finv
+    return TransformPS(f, s1, s2)
+
+def OutTransform(F, Finv, outky):
+    res = 1
+    for inky, s1, s2, sgn in input_list[outky]:
+        f = F[inky] if sgn == 1 else Finv[inky]
+        res *= TransformPS(f, s1, s2)
+    return res
+
+def Transform(F, Finv, inps, inky):
     res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
     for outky, s1, s2, sgn in inps:
-        ff = f if sgn == 1 else finv
-        if s1 is None:
-            continue
-        res[outky] *= sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
+        f = F if sgn == 1 else Finv
+        res[outky] *= TransformPS(f, s1, s2)
     return inky, res
 
 def Next(F):
     res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
-    if parallelize:
+    if True:
         with futures.ProcessPoolExecutor() as executor:
             # Calculate inverses
             print('Calculating inverses...')
@@ -268,19 +272,21 @@ def Next(F):
                 ky, val = fut.result()
                 print('ky = ',ky)
                 Finv[ky] = val
-            # Finv = {ky : val for ky, val in executor.map(inv_par, it,chunksize=len(it))}
 
+    if parallelize:
+        with futures.ProcessPoolExecutor() as executor:
             # Iteration
             print('Main iteration')
-            # res = {}
-            # future_dict = {executor.submit(NewTransform, F, Finv, inps, ky) : ky for inps, ky in input_list}
-            future_dict = {executor.submit(Transform, F[ky], Finv[ky], inps, ky) : ky for inps, ky in input_list}
+            future_dict = {}
+            for outky, inps in input_list.items():
+                for i, (inky, s1,s2,sgn) in enumerate(inps):
+                    future_dict[executor.submit(IdxTransform, F[inky], Finv[inky], outky, i)] = (inky,outky)
             print('All submitted now')
             for fut in futures.as_completed(future_dict):
-                ky, futres = fut.result()
-                print('Computed ',ky)
-                for outky, val in futres.items():
-                    res[outky] *= val
+                inky, outky = future_dict[fut]
+                futres = fut.result()
+                print('Computed ', inky, outky)
+                res[outky] *= futres
             # for ky, val in executor.map(NewTransform, it, chunksize=len(it)):
             #     print('Computed ', ky)
             #     res[ky] = val
@@ -288,7 +294,14 @@ def Next(F):
             # res = {ky : val for ky, val in executor.map(NewTransform, it)}
     else:
         Finv = {ky : inv(val) for ky, val in F.items()}
-        res = {ky : NewTransform((F, Finv, inps, None))[1] for inps, ky in input_list}
+        for outky, inps in input_list.items():
+            for i, (inky, s1, s2, sgn) in enumerate(inps):
+                res[outky] *= IdxTransform(F[inky], Finv[inky], outky,i)
+        # for outky, inps in input_list.items():
+        #     for ky, s1, s2, sgn in inps:
+        #         f = F[ky] if sgn == 1 else Finv[ky]
+        #         res[outky] *= TransformPS(f, s1, s2)
+        # res = {outky : Transform(F[ky], Finv[ky], inps, ky)[1] for ky, inps in input_list.items()}
     return res
 
 def RMC(F):
@@ -497,13 +510,19 @@ def calculate_Tp_matrices(P):
             apply_single_dict[(m, i, 1)] = (jj, subst2pow)
     aux_dict = {(i,j) : list() for i in range(p+1) for j in range(p+1)}
     for m, sgn in MS:
-        for ky0 in range(p+1):
-            for ky1 in range(p+1):
-                ii, s1pow = apply_single_dict[(m, ky0, 0)]
-                jj, s2pow = apply_single_dict[(m, ky1, 1)]
-                # aux_dict[(ii,jj)].append(((ky0,ky1), s1pow, s2pow, sgn))
-                aux_dict[(ky0, ky1)].append(((ii, jj), s1pow, s2pow, sgn))
-    return MS, [(inps, ky) for ky, inps in aux_dict.items()]
+        for inky0 in range(p+1):
+            outky0, s1 = apply_single_dict[(m, inky0, 0)]
+            if s1 is None:
+                continue
+            for inky1 in range(p+1):
+                inky = (inky0, inky1)
+                outky1, s2 = apply_single_dict[(m, inky1, 1)]
+                if s2 is None:
+                    continue
+                outky = (outky0, outky1)
+                aux_dict[outky].append((inky, s1, s2, sgn))
+                # aux_dict[inky].append((outky, s1pow, s2pow, sgn))
+    return MS, aux_dict
 
 # given a non-necessary fundamental discriminant D, computes the matrix gamma_tau associated to an optimal embedding of the ring of discriminant D to M_0(2)
 def compute_gamma_tau(D):
