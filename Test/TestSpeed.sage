@@ -7,6 +7,12 @@ from util import *
 # M = 100, parallel with nonparallel Apply: Level1 174s, Next 260s, first iteration
 # M = 300, parallel: Level1 3910s, Next 16332s, first iteration 17594, second 14447,
 
+
+### M = 100
+# Finished in 658.7516839504242 seconds
+# CPU times: user 7min 28s, sys: 1min 57s, total: 9min 25s
+# Wall time: 15min 7s
+
 ### Initialize
 # M = 50
 # parallelize = True
@@ -27,7 +33,7 @@ Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
 inv_map_poly = Ruv.flattening_morphism()
 map_poly = inv_map_poly.inverse()
 load('orthogonal.sage')
-MS, input_list = calculate_Tp_matrices(1+2*r)
+MS = calculate_Tp_matrices(1+2*r)
 
 ### Find initial seed
 L0, V = initial_seed((0, 0, 1, 0, 0, -1, 1, 0, 0, 0, 0), p)

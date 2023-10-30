@@ -118,19 +118,6 @@ def reduce_mod(f):
     t = f.parent().gen()
     return sum((o % (p**M)) * t**i for o, i in zip(f.coefficients(), f.exponents()))
 
-def inv_par(kyFF):
-    ky, FF = kyFF
-    R = FF.parent()
-    a0inv = ~Rp(FF(0)(0))
-    pw0 = 1-a0inv * FF
-    pw = 1
-    ans = 0
-    for n in range(M):
-        ans += pw
-        pw *= pw0
-    ans *= a0inv
-    return ky, ans
-
 def inv(FF):
     R = FF.parent()
     a0inv = ~Rp(FF(0)(0))
@@ -178,13 +165,10 @@ def compute_level1_contribution(A, Ap, sgn, Rp):
         j2 += p
     ans = ans.change_ring(Rp)
     ans = map_poly(ans)
-    if sgn == 1:
-        return j1, j2, ans, sgn
-    else:
-        return j1, j2, inv(ans), sgn
+    return j1, j2, ans, sgn
 
 def Level1(V):
-    res = {(i,j) : Ruv(1) for i in range(p+1) for j in range(p+1)}
+    res = {(i,j) : [Ruv(1), Ruv(1)] for i in range(p+1) for j in range(p+1)}
     dg = {(i,j) : 0 for i in range(p+1) for j in range(p+1)}
     pM = p**M
     input_vec = []
@@ -192,16 +176,15 @@ def Level1(V):
         Ap = A.apply_map(lambda x : Rp(phi(x).lift()))
         Bp = B.apply_map(lambda x : Rp(phi(x).lift()))
         input_vec.extend([(A,Ap,1,Rp), (B,Bp,-1,Rp)])
-    if False: # parallelize:
-        I = compute_level1_contribution(input_vec)
-        for _, (i, j, FF, sgn) in I:
-            res[i,j] *= FF
-            dg[i,j] += sgn
-    else:
-        for A, Ap, sgn, _ in input_vec:
-            i, j, FF, sgn = compute_level1_contribution(A, Ap, sgn, Rp)
-            res[i,j] *= FF
-            dg[i,j] += sgn
+    for A, Ap, sgn, _ in input_vec:
+        i, j, FF, sgn = compute_level1_contribution(A, Ap, sgn, Rp)
+        if sgn == 1:
+            res[i,j][0] *= FF
+        else:
+            res[i,j][1] *= FF
+        dg[i,j] += sgn
+    for ky in res:
+        res[ky] = res[ky][0] * inv(res[ky][1])
     return res, dg
 
 @cached_function
@@ -237,79 +220,38 @@ def ApplySingle(A, i, z, check=True):
         substx *= sum(r**k for k in range(M+1))
     return ii, substx
 
-
-TransformPS = lambda f, s1, s2 : sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
-
-def IdxTransform(F, Finv, outky, i):
-    inky, s1, s2, sgn = input_list[outky][i]
-    f = F if sgn == 1 else Finv
-    return TransformPS(f, s1, s2)
-
-def OutTransform(F, Finv, outky):
-    res = 1
+def Transform(outky):
+    global gF, input_list
+    res = Ruv(1)
+    resinv = Ruv(1)
     for inky, s1, s2, sgn in input_list[outky]:
-        f = F[inky] if sgn == 1 else Finv[inky]
-        res *= TransformPS(f, s1, s2)
-    return res
-
-def Transform(F, Finv, inps, inky):
-    res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
-    for outky, s1, s2, sgn in inps:
-        f = F if sgn == 1 else Finv
-        res[outky] *= TransformPS(f, s1, s2)
-    return inky, res
+        f = gF[inky]
+        newres = sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
+        if sgn == 1:
+            res *= newres
+        else:
+            resinv *= newres
+    return res * inv(resinv)
 
 def Next(F):
+    global gF
+    gF = F
     res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
-    if True:
-        with futures.ProcessPoolExecutor() as executor:
-            # Calculate inverses
-            print('Calculating inverses...')
-            future = {executor.submit(inv_par, (ky,val)) : ky for ky, val in F.items()}
-            Finv = {}
-            print('Looking at as_completed')
-            for fut in futures.as_completed(future):
-                ky, val = fut.result()
-                print('ky = ',ky)
-                Finv[ky] = val
-
     if parallelize:
         with futures.ProcessPoolExecutor() as executor:
             # Iteration
-            print('Main iteration')
-            future_dict = {}
-            for outky, inps in input_list.items():
-                for i, (inky, s1,s2,sgn) in enumerate(inps):
-                    future_dict[executor.submit(IdxTransform, F[inky], Finv[inky], outky, i)] = (inky,outky)
-            print('All submitted now')
+            future_dict = {executor.submit(Transform, outky) : outky for outky, inps in input_list.items()}
             for fut in futures.as_completed(future_dict):
-                inky, outky = future_dict[fut]
-                futres = fut.result()
-                print('Computed ', inky, outky)
-                res[outky] *= futres
-            # for ky, val in executor.map(NewTransform, it, chunksize=len(it)):
-            #     print('Computed ', ky)
-            #     res[ky] = val
-            print('Done')
-            # res = {ky : val for ky, val in executor.map(NewTransform, it)}
+                res[future_dict[fut]] = fut.result()
     else:
-        Finv = {ky : inv(val) for ky, val in F.items()}
         for outky, inps in input_list.items():
-            for i, (inky, s1, s2, sgn) in enumerate(inps):
-                res[outky] *= IdxTransform(F[inky], Finv[inky], outky,i)
-        # for outky, inps in input_list.items():
-        #     for ky, s1, s2, sgn in inps:
-        #         f = F[ky] if sgn == 1 else Finv[ky]
-        #         res[outky] *= TransformPS(f, s1, s2)
-        # res = {outky : Transform(F[ky], Finv[ky], inps, ky)[1] for ky, inps in input_list.items()}
+            res[outky] = Transform(outky)
     return res
 
 def RMC(F):
     FF = F
     res = F
     for j in range(1,M):
-        # d2 = max(val.degree() for ky, val in F.items())
-        # d1 = max(o.degree() for ky, val in F.items() for o in val.coefficients())
         print(f'Iteration {j}')
         t = walltime()
         FF = Next(FF)
@@ -425,10 +367,10 @@ def Eval0(L0, tau):
 def Eval(J, tau):
     t0, t1 = tau
     ans = 1
-    for ky, val in J.items():
+    for ky, valnum in J.items():
         x0 = t0 if ky[0] == p else 1/(t0 - ky[0])
         x1 = t1 if ky[1] == p else 1/(t1 - ky[1])
-        ans *= sum(sum(o.lift() * x0**j for o, j in zip(a.coefficients(), a.exponents())) * x1**i for a, i in zip(J[ky].coefficients(), J[ky].exponents()))
+        ans *= sum(sum(o.lift() * x0**j for o, j in zip(a.coefficients(), a.exponents())) * x1**i for a, i in zip(valnum.coefficients(), valnum.exponents()))
     return ans
 
 def good_matrices(m):
@@ -470,7 +412,16 @@ def RMCEval(L0, J, A):
     res = res0 * res1
     return res, res0, res1
 
+def list_powers(x, M,j):
+    if x is None:
+        return j, x
+    plist = [x.parent()(1)]
+    for i in range(M):
+        plist.append(x*plist[-1])
+    return j, plist
+
 def calculate_Tp_matrices(P):
+    global input_list
     Tplist = [matrix(2,2,[P, a, 0, 1]) for a in range(P.norm()) ] + [matrix(2,2,[1,0,0,P])]
     MS = []
     for m in Tplist:
@@ -486,29 +437,39 @@ def calculate_Tp_matrices(P):
     R = S.base_ring()
     z1 = R.gen()
     z2 = S.gen()
-    for i in range(p+1):
-        for m, sgn in MS:
+    future = {}
+    if False:
+        with futures.ProcessPoolExecutor() as executor:
+            for m, sgn in MS:
+                m.set_immutable()
+                mconj = m.apply_map(lambda x : x.trace() - x)
+                A = m.apply_morphism(phi)
+                Aconj = mconj.apply_morphism(phi)
+                for i in range(p+1):
+                    ii, subst1 = ApplySingle(A, i, z1, check=False)
+                    jj, subst2 = ApplySingle(Aconj, i, z2, check=True)
+                    future[executor.submit(list_powers, subst1, M, ii)] = (m,i,0)
+                    future[executor.submit(list_powers, subst2, M, jj)] = (m,i,1)
+            print(f'All {len(future)} jobs submitted, now computing in parallel')
+            for fut in futures.as_completed(future):
+                apply_single_dict[future[fut]] = fut.result()
+            print('Done')
+    else:
+        cnt = 0
+        for cnt, (m, sgn) in enumerate(MS):
+            update_progress(float(cnt)/len(MS))
             m.set_immutable()
             mconj = m.apply_map(lambda x : x.trace() - x)
             A = m.apply_morphism(phi)
             Aconj = mconj.apply_morphism(phi)
-            ii, subst1 = ApplySingle(A, i, z1, check=False)
-            try:
-                subst1pow = [subst1.parent()(1)]
-                for k in range(M):
-                    subst1pow.append(subst1pow[-1] * subst1)
-            except AttributeError:
-                subst1pow = None
-            apply_single_dict[(m, i, 0)] = (ii, subst1pow)
-            jj, subst2 = ApplySingle(Aconj, i, z2, check=True)
-            try:
-                subst2pow = [subst2.parent()(1)]
-                for k in range(M):
-                    subst2pow.append(subst2pow[-1] * subst2)
-            except AttributeError:
-                subst2pow = None
-            apply_single_dict[(m, i, 1)] = (jj, subst2pow)
-    aux_dict = {(i,j) : list() for i in range(p+1) for j in range(p+1)}
+            for i in range(p+1):
+                ii, subst1 = ApplySingle(A, i, z1, check=False)
+                jj, subst2 = ApplySingle(Aconj, i, z2, check=True)
+                apply_single_dict[m,i,0] = list_powers(subst1,M,ii)
+                apply_single_dict[m,i,1] = list_powers(subst2,M,jj)
+        print('Done')
+
+    input_list = {(i,j) : list() for i in range(p+1) for j in range(p+1)}
     for m, sgn in MS:
         for inky0 in range(p+1):
             outky0, s1 = apply_single_dict[(m, inky0, 0)]
@@ -520,9 +481,8 @@ def calculate_Tp_matrices(P):
                 if s2 is None:
                     continue
                 outky = (outky0, outky1)
-                aux_dict[outky].append((inky, s1, s2, sgn))
-                # aux_dict[inky].append((outky, s1pow, s2pow, sgn))
-    return MS, aux_dict
+                input_list[outky].append((inky, s1, s2, sgn))
+    return MS
 
 # given a non-necessary fundamental discriminant D, computes the matrix gamma_tau associated to an optimal embedding of the ring of discriminant D to M_0(2)
 def compute_gamma_tau(D):
