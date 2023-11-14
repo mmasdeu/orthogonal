@@ -590,18 +590,6 @@ def compute_gamma_tau(D):
             return gamma_tau
         n +=1
 
-def compute_gammas(max_D=1000):
-    gamma_list = []
-    for D in srange(2, max_D):
-        if D.is_square():
-            continue
-        try:
-            gamma_tau = compute_gamma_tau(D)
-        except (TypeError,RuntimeError,NotImplementedError):
-            continue
-        gamma_list.append((D,gamma_tau))
-    return gamma_list
-
 def vanishing_functional(N = 10):
     g = ModularForms(20).cuspidal_subspace().gens()[0].q_expansion(N)
     E = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
@@ -661,9 +649,7 @@ def initial_seed(v, p):
 
 
 def find_value_one(maxD, cycle_type='smallCM'):
-    ones = []
-    not_ones = []
-    errors = []
+    stats = {'0':[], '1':[], 'oo':[], '?':[], 'err':[]}
     for D in srange(2, maxD):
         print(D)
         if D.is_square():
@@ -677,10 +663,18 @@ def find_value_one(maxD, cycle_type='smallCM'):
             x1 = RMCEval(D,cycle_type=cycle_type,prec=10)
             if x1 == 1:
                 print(f'{D = } yields one')
-                ones.append(D)
+                stats['1'].append(D)
+            elif x1 == 0:
+                print(f'{D = } yields zero')
+                stats['0'].append(D)
+            elif x1.valuation() < 40:
+                print(f'{D = } yields infinity')
+                stats['oo'].append(D)
             else:
                 print(f'{D = } yields {x1}')
-                not_ones.append(D)
-        except (TypeError, ValueError, RuntimeError, PrecisionError) as e:
-            errors.append((D,str(e)))
-    return ones, not_ones, errors
+                stats['?'].append(D)
+        except (TypeError, ValueError, RuntimeError) as e:
+            stats['err'].append((D,str(e)))
+        except PrecisionError:
+            stats['oo'].append(D)
+    return stats
