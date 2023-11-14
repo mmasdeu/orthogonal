@@ -624,6 +624,7 @@ def recognize_DGL_algdep(J, degree, tolerance=0.9, prime_bound=None, roots_of_un
         x = ff.parent().gen()
         height_poly = height_polynomial(ff, base=p)
         if height_poly < height_threshold:
+            ff = ff.factor()[-1][0]
             nrm = ff.constant_coefficient() / ff.leading_coefficient()
             real_tol = height_poly / J.precision_relative()
             fwrite("# SUCCESS! (tol = %s)"%(real_tol), outfile)
