@@ -167,6 +167,19 @@ def compute_level1_contribution(A, Ap, sgn, Rp):
     ans = map_poly(ans)
     return j1, j2, ans, sgn
 
+def inv_par(kyFF):
+    ky, FF = kyFF
+    R = FF.parent()
+    a0inv = ~Rp(FF(0)(0))
+    pw0 = 1-a0inv * FF
+    pw = 1
+    ans = 0
+    for n in range(M):
+        ans += pw
+        pw *= pw0
+    ans *= a0inv
+    return ky, ans
+
 def Level1(V):
     res = {(i,j) : [Ruv(1), Ruv(1)] for i in range(p+1) for j in range(p+1)}
     dg = {(i,j) : 0 for i in range(p+1) for j in range(p+1)}
@@ -183,8 +196,13 @@ def Level1(V):
         else:
             res[i,j][1] *= FF
         dg[i,j] += sgn
-    for ky in res:
-        res[ky] = res[ky][0] * inv(res[ky][1])
+    with futures.ProcessPoolExecutor() as executor:
+        # Calculate inverses
+        print('Calculating inverses...')
+        future = {executor.submit(inv_par, (ky, val[1])) : ky for ky, val in res.items()}
+        for fut in futures.as_completed(future):
+            ky, val = fut.result()
+            res[ky] = res[ky][0] * val
     return res, dg
 
 @cached_function
@@ -242,24 +260,42 @@ def Next(F):
             # Iteration
             future_dict = {executor.submit(Transform, outky) : outky for outky, inps in input_list.items()}
             for fut in futures.as_completed(future_dict):
-                res[future_dict[fut]] = fut.result()
+                outky = future_dict[fut]
+                res[outky] = fut.result()
     else:
         for outky, inps in input_list.items():
             res[outky] = Transform(outky)
     return res
 
+def mul_dict(x,y):
+    return {ky : x[ky] * y[ky] for ky in x}
+
 def RMC(F):
     FF = F
-    res = F
+    res = [F]
     for j in range(1,M):
         print(f'Iteration {j}')
         t = walltime()
-        FF = Next(FF)
-        FF = Next(FF)
-        for ky in res:
-            res[ky] *= FF[ky]
+        FF = Next(Next(FF))
+        res.append(FF)
         print(f'..done in {walltime(t)} seconds.')
-    return res
+    print(f'Now computing product...')
+    t = walltime()
+    if parallelize:
+        with futures.ProcessPoolExecutor() as executor:
+            while len(res) > 1:
+                future_dict = {executor.submit(mul_dict, res[i], res[i+1]) : i for i in range(0,len(res)-1, 2) }
+                res = [] if len(res) % 2 == 0 else [res[-1]]
+                for fut in futures.as_completed(future_dict):
+                    res.append(fut.result())
+        ans = res[0]
+    else:
+        ans = {ky : prod(r[ky] for r in res) for ky in res[0] }
+    print(f'..done in {walltime(t)} seconds.')
+    R0 = Ruv.base_ring()
+    phi = R0.hom([ZZ['u'].gen()],base_map=lambda x:x.lift(),check=False)
+    ans = {ky : f.change_ring(phi) for ky, f in ans.items()}
+    return ans
 
 def solve_quadratic(f, K = None, return_all = False):
     a,b,c = f[2], f[1], f[0]
@@ -353,7 +389,6 @@ def fixed_point(g, phi):
     f = phi(c)*x**2 + phi(d-a)*x - phi(b)
     p = Kp.prime()
     L = Qq(p**2, Kp.precision_cap(),names='b')
-    fphi = f.map_coefficients(phi)
     return solve_quadratic(f.change_ring(phi).change_ring(L), L, return_all=True)
 
 def Eval0(L0, tau):
@@ -364,13 +399,24 @@ def Eval0(L0, tau):
     ans = prod((vv * num.apply_morphism(phi).apply_map(lambda o : KK(o)) * ww) / (vv * den.apply_morphism(phi).apply_map(lambda o : KK(o)) * ww) for num, den in zip(*L0))
     return ans
 
-def Eval(J, tau):
+def EvalPS(f, x0, x1, prec=M):
+    ans = 1
+    x0s = [1, x0]
+    x1s = [1, x1]
+    for _ in range(prec):
+        x0s.append(x0 * x0s[-1])
+        x1s.append(x1 * x1s[-1])
+    return sum(sum(o * x0s[j] for o, j in zip(a.coefficients(), a.exponents()) if j < prec) * x1s[i] for a, i in zip(f.coefficients(), f.exponents()) if i < prec)
+
+def Eval(tau, prec=M):
+    global J
     t0, t1 = tau
     ans = 1
-    for ky, valnum in J.items():
+    for ky in J:
         x0 = t0 if ky[0] == p else 1/(t0 - ky[0])
         x1 = t1 if ky[1] == p else 1/(t1 - ky[1])
-        ans *= sum(sum(o.lift() * x0**j for o, j in zip(a.coefficients(), a.exponents())) * x1**i for a, i in zip(valnum.coefficients(), valnum.exponents()))
+        val = J[ky]
+        ans *= EvalPS(val, x0, x1, prec)
     return ans
 
 def good_matrices(m):
@@ -402,15 +448,36 @@ def good_matrices(m):
                 return [(m1,1),(m2,-1)]
     raise RuntimeError('No matrix found!')
 
-def RMCEval(L0, J, A):
-    A = A.change_ring(F)
-    tau0 = fixed_point(A, phi)
+def smallCMcycle(D):
+    A = compute_gamma_tau(D).change_ring(F)
+    t0, t1 = fixed_point(A, phi)
+    return A, [t0, t1]
+
+def smallRMcycle(D):
+    A = compute_gamma_tau(D).change_ring(F)
+    t0, t1 = fixed_point(A, phi)
+    return A, [t0, t0] # not a typo!
+
+def RMCEval(D, cycle_type = 'smallCM', prec=M):
+    global L0, J
+    if cycle_type == 'smallCM':
+        A, tau0 = smallCMcycle(D)
+    else:
+        if cycle_type != 'smallRM':
+            raise NotImplementedError('Cycle type should be either "smallCM" or "smallRM"')
+        A, tau0 = smallRMcycle(D)
     mlist0 = matrices_for_unimodular_path(A[0,0], A[1,0])
     mlist = sum((good_matrices(m) for m in mlist0),[])
     res0 = prod(Eval0(L0, act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
-    res1 = prod(Eval(J, act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
-    res = res0 * res1
-    return res, res0, res1
+    if parallelize:
+        res1 = 1
+        with futures.ProcessPoolExecutor() as executor:
+            future_dict = {executor.submit(Eval, act_matrix(m.apply_morphism(phi).adjugate(), tau0), prec) : sgn for m, sgn in mlist}
+            for fut in futures.as_completed(future_dict):
+                res1 *= fut.result()**(future_dict[fut])
+    else:
+        res1 = prod(Eval(act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
+    return (res0 * res1).add_bigoh(prec)
 
 def list_powers(x, M,j):
     if x is None:
@@ -484,10 +551,14 @@ def calculate_Tp_matrices(P):
                 input_list[outky].append((inky, s1, s2, sgn))
     return MS
 
+
 # given a non-necessary fundamental discriminant D, computes the matrix gamma_tau associated to an optimal embedding of the ring of discriminant D to M_0(2)
 def compute_gamma_tau(D):
     Dsqf = D.squarefree_part()
-    c = ZZ((D / fundamental_discriminant(D)).sqrt())
+    try:
+        c = ZZ((D / fundamental_discriminant(D)).sqrt())
+    except TypeError:
+        raise ValueError('D is not the discrimininant of a quadratic order')
     F.<r> = QuadraticField(Dsqf)
     w = F.maximal_order().ring_generators()[0]
     # O_c has Z-basis <1, cw>, we use this basis to embed O_c into M_2(Z)
@@ -519,6 +590,18 @@ def compute_gamma_tau(D):
             return gamma_tau
         n +=1
 
+def compute_gammas(max_D=1000):
+    gamma_list = []
+    for D in srange(2, max_D):
+        if D.is_square():
+            continue
+        try:
+            gamma_tau = compute_gamma_tau(D)
+        except (TypeError,RuntimeError,NotImplementedError):
+            continue
+        gamma_list.append((D,gamma_tau))
+    return gamma_list
+
 def vanishing_functional(N = 10):
     g = ModularForms(20).cuspidal_subspace().gens()[0].q_expansion(N)
     E = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
@@ -545,6 +628,16 @@ def vanishing_functional(N = 10):
         W = L.submodule(ans)
     return ans
 
+def label(func):
+    pos = ''
+    neg = ''
+    for i, o in enumerate(func):
+        if o > 0:
+            pos = pos + o * str(i+1)
+        else:
+            neg = neg + (-o) * str(i+1)
+    return pos + '_' + neg
+
 def initial_seed(v, p):
     L0 = [[], []]
     V = [[], []]
@@ -567,3 +660,27 @@ def initial_seed(v, p):
     return L0, V
 
 
+def find_value_one(maxD, cycle_type='smallCM'):
+    ones = []
+    not_ones = []
+    errors = []
+    for D in srange(2, maxD):
+        print(D)
+        if D.is_square():
+            continue
+        try:
+            c2 = ZZ(D / fundamental_discriminant(D))
+            c2 = c2.sqrt()
+        except TypeError:
+            continue
+        try:
+            x1 = RMCEval(D,cycle_type=cycle_type,prec=10)
+            if x1 == 1:
+                print(f'{D = } yields one')
+                ones.append(D)
+            else:
+                print(f'{D = } yields {x1}')
+                not_ones.append(D)
+        except (TypeError, ValueError, RuntimeError, PrecisionError) as e:
+            errors.append((D,str(e)))
+    return ones, not_ones, errors
