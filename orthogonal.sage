@@ -10,7 +10,7 @@ def quo_rem_in_gaussian_integers(a,b):
     if b == 0:
         raise ZeroDivisionError
     K = a.parent()
-    q = ((a/b)[0]).round() + ((a/b)[1]).round()*K.gen()
+    q = ((a/b)[0]).round('away') + ((a/b)[1]).round('away')*K.gen()
     r = a - q*b
     assert r.norm() < b.norm()
     return (q, r)
@@ -157,8 +157,7 @@ def compute_level1_contribution(A, Ap, sgn, Rp):
         j1 = f1.change_ring(to_x).roots()[0][0].lift()
         j2 = f2.change_ring(to_x).roots()[0][0].lift()
         tau1, tau2 = j1 + 1 / t1, j2 + 1 / t2
-    ans = (pol.parent()(pol(tau1,tau2) * t1**d1 * t2**d2))
-    ans = ans.change_ring(phi)
+    ans = (pol.parent()(pol(tau1,tau2) * t1**d1 * t2**d2)).change_ring(phi)
     while j1 < 0:
         j1 += p
     while j2 < 0:
@@ -293,8 +292,8 @@ def RMC(F):
         ans = {ky : prod(r[ky] for r in res) for ky in res[0] }
     print(f'..done in {walltime(t)} seconds.')
     R0 = Ruv.base_ring()
-    phi = R0.hom([ZZ['u'].gen()],base_map=lambda x:x.lift(),check=False)
-    ans = {ky : f.change_ring(phi) for ky, f in ans.items()}
+    psi = R0.hom([ZZ['u'].gen()],base_map=lambda x:x.lift(),check=False)
+    ans = {ky : f.change_ring(psi) for ky, f in ans.items()}
     return ans
 
 def solve_quadratic(f, K = None, return_all = False):
@@ -505,36 +504,18 @@ def calculate_Tp_matrices(P):
     z1 = R.gen()
     z2 = S.gen()
     future = {}
-    if False:
-        with futures.ProcessPoolExecutor() as executor:
-            for m, sgn in MS:
-                m.set_immutable()
-                mconj = m.apply_map(lambda x : x.trace() - x)
-                A = m.apply_morphism(phi)
-                Aconj = mconj.apply_morphism(phi)
-                for i in range(p+1):
-                    ii, subst1 = ApplySingle(A, i, z1, check=False)
-                    jj, subst2 = ApplySingle(Aconj, i, z2, check=True)
-                    future[executor.submit(list_powers, subst1, M, ii)] = (m,i,0)
-                    future[executor.submit(list_powers, subst2, M, jj)] = (m,i,1)
-            print(f'All {len(future)} jobs submitted, now computing in parallel')
-            for fut in futures.as_completed(future):
-                apply_single_dict[future[fut]] = fut.result()
-            print('Done')
-    else:
-        cnt = 0
-        for cnt, (m, sgn) in enumerate(MS):
-            update_progress(float(cnt)/len(MS))
-            m.set_immutable()
-            mconj = m.apply_map(lambda x : x.trace() - x)
-            A = m.apply_morphism(phi)
-            Aconj = mconj.apply_morphism(phi)
-            for i in range(p+1):
-                ii, subst1 = ApplySingle(A, i, z1, check=False)
-                jj, subst2 = ApplySingle(Aconj, i, z2, check=True)
-                apply_single_dict[m,i,0] = list_powers(subst1,M,ii)
-                apply_single_dict[m,i,1] = list_powers(subst2,M,jj)
-        print('Done')
+    cnt = 0
+    for cnt, (m, sgn) in enumerate(MS):
+        update_progress(float(cnt)/len(MS))
+        m.set_immutable()
+        mconj = m.apply_map(lambda x : x.trace() - x)
+        A = m.apply_morphism(phi)
+        Aconj = mconj.apply_morphism(phi)
+        for i in range(p+1):
+            ii, subst1 = ApplySingle(A, i, z1, check=False)
+            jj, subst2 = ApplySingle(Aconj, i, z2, check=True)
+            apply_single_dict[m,i,0] = list_powers(subst1,M,ii)
+            apply_single_dict[m,i,1] = list_powers(subst2,M,jj)
 
     input_list = {(i,j) : list() for i in range(p+1) for j in range(p+1)}
     for m, sgn in MS:
@@ -549,14 +530,14 @@ def calculate_Tp_matrices(P):
                     continue
                 outky = (outky0, outky1)
                 input_list[outky].append((inky, s1, s2, sgn))
-    return MS
+    return
 
 
 # given a non-necessary fundamental discriminant D, computes the matrix gamma_tau associated to an optimal embedding of the ring of discriminant D to M_0(2)
 def compute_gamma_tau(D):
-    Dsqf = D.squarefree_part()
+    Dsqf = ZZ(D).squarefree_part()
     try:
-        c = ZZ((D / fundamental_discriminant(D)).sqrt())
+        c = ZZ((ZZ(D) / fundamental_discriminant(D)).sqrt())
     except TypeError:
         raise ValueError('D is not the discrimininant of a quadratic order')
     F.<r> = QuadraticField(Dsqf)
@@ -616,7 +597,7 @@ def vanishing_functional(N = 10):
         W = L.submodule(ans)
     return ans
 
-def label(func):
+def label_from_functional(func):
     pos = ''
     neg = ''
     for i, o in enumerate(func):
@@ -626,7 +607,19 @@ def label(func):
             neg = neg + (-o) * str(i+1)
     return pos + '_' + neg
 
+def functional_from_label(label):
+    func = [0 for _ in range(11)] # HARDCODED, DEBUG
+    pos, neg = label.split('_')
+    for i in pos:
+        func[int(i)-1] += 1
+    for i in neg:
+        func[int(i)-1] -= 1
+    return tuple(func)
+
 def initial_seed(v, p):
+    if isinstance(v, str):
+        v = functional_from_label(v)
+    v = tuple(v)
     L0 = [[], []]
     V = [[], []]
     for (im1, vi) in enumerate(v):
