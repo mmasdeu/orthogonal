@@ -6,7 +6,12 @@ if __name__ == "__main__":
     # calling the main function
     label = str(sys.argv[1])
     M = int(sys.argv[2])
+    if len(sys.argv) == 4:
+        fname = sys.argv[3]
+    else:
+        fname = f'L0Jtuple_{label}_{M}.sobj'
     print(f'label = {label}, precision = {M}')
+    print(f'{fname = }')
     ncpus = 64
     parallelize = True
     p = 5
@@ -41,5 +46,5 @@ if __name__ == "__main__":
     t = walltime()
     J = RMC(F2)
     label = label_from_functional(label)
-    save((L0, J), f'L0Jtuple_{label}_{M}.sobj')
+    save((L0, J), fname)
     print(f'Finished in {walltime(t)} seconds')
