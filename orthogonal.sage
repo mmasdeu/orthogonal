@@ -2,6 +2,7 @@
 from sage.rings.padics.precision_error import PrecisionError
 from multiprocessing import Process, Manager, Pool
 from concurrent import futures
+from util import *
 
 
 # Related to Manin Trick
@@ -450,21 +451,39 @@ def good_matrices(m):
 def smallCMcycle(D):
     A = compute_gamma_tau(D).change_ring(F)
     t0, t1 = fixed_point(A, phi)
-    return A, [t0, t1]
+    hE = QuadraticField(-D,'w').class_number()
+    return A, [t0, t1], hE
 
 def smallRMcycle(D):
     A = compute_gamma_tau(D).change_ring(F)
     t0, t1 = fixed_point(A, phi)
-    return A, [t0, t0] # not a typo!
+    hE = QuadraticField(D,'w').class_number()
+    return A, [t0, t0], hE # not a typo!
 
-def RMCEval(D, cycle_type = 'smallCM', prec=M):
+def bigRMcycle(D, n=1):
+    found = False
+    K.<t> = QuadraticField(D)
+    try:
+        alpha = K.elements_of_norm(-1)[0] * n
+    except IndexError:
+        raise ValueError(f'Discriminant (={D}) not admissible: no elements of norm -1 in QQ(sqrt(D))')
+    A, tau0, tau1 = compute_gamma_tau_ATR(alpha)
+    E = tau_ATR_field(alpha)
+    return A, [tau0, tau1], E.class_number()
+
+def RMCEval(D, cycle_type = 'smallCM', prec=M, n=1, return_class_number=False):
     global L0, J
     if cycle_type == 'smallCM':
-        A, tau0 = smallCMcycle(D)
+        A, tau0, hE = smallCMcycle(D)
+    elif cycle_type == 'smallRM':
+        A, tau0, hE = smallRMcycle(D)
     else:
-        if cycle_type != 'smallRM':
-            raise NotImplementedError('Cycle type should be either "smallCM" or "smallRM"')
-        A, tau0 = smallRMcycle(D)
+        if cycle_type != 'bigRM':
+            raise NotImplementedError('Cycle type should be either "smallCM" or "smallRM" or "bigRM"')
+        A, tau0, hE = bigRMcycle(D, n)
+
+    if any(t.trace() == 2 * t for t in tau0):
+        raise ValueError(f'Tuple {(D,n) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
     mlist0 = matrices_for_unimodular_path(A[0,0], A[1,0])
     mlist = sum((good_matrices(m) for m in mlist0),[])
     res0 = prod(Eval0(L0, act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
@@ -476,7 +495,10 @@ def RMCEval(D, cycle_type = 'smallCM', prec=M):
                 res1 *= fut.result()**(future_dict[fut])
     else:
         res1 = prod(Eval(act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
-    return (res0 * res1).add_bigoh(prec)
+    if return_class_number:
+        return (res0 * res1).add_bigoh(prec), hE
+    else:
+        return (res0 * res1).add_bigoh(prec)
 
 def list_powers(x, M,j):
     if x is None:
@@ -570,17 +592,131 @@ def compute_gamma_tau(D):
             assert gamma_tau[1][0] % 2 == 0
             return gamma_tau
         n +=1
-# Labels for N = 10: ['4_8', '2_4', '37_6', '16_9', '19_278', '1249_67', '11234_6', '1555_368']
-def vanishing_functional(N = 10):
+
+
+def tau_ATR_field(alpha, names='w'):
+    FF = alpha.parent()
+    y = FF['y'].gen()
+    return NumberField(y*y - alpha, names=names)
+
+# it accepts a real quadratic field FF and an element alpha in FF of norm -1; then E = FF(sqrt(alpha) is the ATR extension and K = Q(i) is contained in the galois closure of E
+def compute_gamma_tau_ATR(alpha):
+    # FF = alpha.parent()
+    # x = QQ['x'].gen()
+    # R.<y> = PolynomialRing(FF)
+    E = tau_ATR_field(alpha,'w')
+    w = E.gen()
+    K = F
+    MM.<gMM> = E.galois_closure()
+    if MM.disc() % p == 0:
+        raise NotImplementedError('tau lives in a ramified extension') # p ramifies in MM so we would need to work with ramified extensions
+    # Now we redefine E, because we want to view it as a subfield of MM. We also construct L as a subfield of MM
+    EEp = [f for f in MM.subfields() if f[0].degree() == 4 and f[0].is_isomorphic(E)]
+    LLp = [f for f in MM.subfields() if f[0].degree() == 4 and not f[0].is_isomorphic(E)]
+    E, sigmaE, _ = EEp[0]
+    L, sigmaL, _ = LLp[1]
+
+    # take the unit of norm 1 in E
+    sigma = E.automorphisms()[1]
+    found = False
+    for uu in E.units():
+        if uu.absolute_minpoly().degree() == 4 and uu*sigma(uu) == 1:
+            u = uu
+            found = True
+    if found == False:
+        raise RuntimeError('did not find a unit of relative norm one')
+    # from u construct gamma and its galois conjugate gamma_p
+    gL = L.primitive_element()
+    Gal_M_L = [t for t in MM.automorphisms() if t(sigmaL(gL)) == sigmaL(gL)]
+    gE = E.primitive_element()
+    Gal_M_E = [t for t in MM.automorphisms() if t(sigmaE(gE)) == sigmaE(gE)]
+    Nu = Gal_M_L[1](sigmaE(u)) * sigmaE(u) # compute N_{M/L}(u)
+    L_K.<gL_K> = L.relativize(K.embeddings(L)[0])
+    u_L_K = Nu.minpoly().roots(L_K)[0][0] # this is Nu viewed as an element of the relative extension L_K
+    a, c = u_L_K.vector()
+    b, d = (u_L_K * gL_K).vector()
+    gamma = Matrix(2,2,[a,b,c,d])
+    # this matrix is constructed using the K-basis <1, gL_K>, but gL_K is not a generator of the ring of integers of L/K, so we need to change basis
+    _, gOLK = module_generators(L_K) # gOLK is a generator of O_L_K over O_K
+    O = L_K.maximal_order()
+    X = Matrix([(1,0), gOLK.vector()]).transpose() # change of basis matrix
+    # we check that gOLK is a generator of O_L_K over O_K, by checking that any generator of O_L_K when written in terms of <1, gOLK> has integral coefficients
+    for gen in O.gens():
+        if not all([o.is_integral() for o in (X.inverse()* vector(gen.vector())).list() ]):
+            raise RuntimeError('it seems that we do not have an embedding of the maximal order')
+    # now we conjugate gamma to express it in terms of the basis <1, gOLK>
+    gamma = X^-1 * gamma * X
+    Ms = [Matrix(2,2,[1,0,0,1]), Matrix(2,2,[0,1,-1,0]), Matrix(2,2,[2,1,1,1]), Matrix(2,2,[1+i,1,i,1]), Matrix(2,2,[1+i,1,1,1]), Matrix(2,2,[i,1,0,1]), Matrix(2,2,[i,1,2*i,1])]
+    found = False
+    for M in Ms:
+        aa, bb, cc, dd = (M*gamma*M.inverse()).list()
+        if cc.real() % 2 == 0 and cc.imag() % 2== 0:
+            found = True
+            gamma = M*gamma*M.inverse()
+            break
+    if not found:
+        raise RuntimeError('maybe there is no embedding into Gamma0(2)?')
+    gamma_p = gamma.apply_morphism(a.parent().automorphisms()[1])
+    assert u_L_K.minpoly() == gamma.minpoly()
+
+    # Now we compute the matrix M and the scalar l such that gamma * M * gamma_p^{-1} = l * M
+    A.<xx,yy,bb,cc,ll> = PolynomialRing(K)
+    alpha = xx + i*yy
+    alpha_p = xx-i*yy
+    M = Matrix(A,2,2,[alpha, -bb,cc,-alpha_p])
+    B.<x,y,b,c,l> = PolynomialRing(E)
+    fAB = A.hom([x,y,b,c,l], B, check = False)
+    s = K.automorphisms()[1]
+    Meq = gamma*M - ll*M*gamma_p
+    eqns =[fAB(M.det())] +  [fAB((z + z.map_coefficients(s))/2) for z in Meq.list()] + [fAB((z - z.map_coefficients(s))/(2*i)) for z in Meq.list()]  + [c-1]
+    I = B.ideal(eqns)
+    pt = I.variety()[0]
+    alpha = sigmaE(pt[x]) + K.embeddings(MM)[0](i) * sigmaE(pt[y])
+    alpha_p = sigmaE(pt[x]) - K.embeddings(MM)[0](i) * sigmaE(pt[y])
+    M = Matrix(MM, 2, 2, [alpha, -sigmaE(pt[b]), sigmaE(pt[c]), -alpha_p])
+    Mp = Matrix(MM, 2, 2, [alpha_p, -sigmaE(pt[b]), sigmaE(pt[c]), -alpha])
+    iKM = K.embeddings(MM)[0]
+    # assert that M is fiexed under the action of gamma
+    assert gamma.apply_map(iKM) * M * gamma_p.apply_map(iKM)**-1 == sigmaE(pt[l]) * M
+    tau1 = M[0][0]
+    tau2 = -M[1][1]
+    # Now we compute the imge of tau1 and tau2 in Qp**2
+    Kp = phi.codomain()
+    L = Qq(p**2, Kp.precision_cap(),names='b')
+    roots = [a[0] for a in MM.defining_polynomial().roots(L)]
+    if len(roots) == 0:
+        raise RuntimeError('tau does not live in Qp**2')
+    # we find an embedding of MM into Qp**2 that extends phi
+    found_emb = False
+    for r in roots:
+        iMML = MM.hom([r],L)
+        if iMML(iKM(K.gen())) == L(phi(K.gen())):
+            found_emb = True
+            break
+    if found_emb == False:
+        raise RuntimeError('No embedding of MM into Qp**2 found that extends phi')
+    return gamma, iMML(tau1), iMML(tau2)
+
+
+
+def sum_of_squares(n):
+    return all(e % 2 == 0 for p, e in ZZ(n).factor() \
+               if p % 4 == 3)
+
+def vanishing_functional(N = 20):
+    # We only consider d with are not a norm from Z[i]
+    valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
+
     g = ModularForms(20).cuspidal_subspace().gens()[0].q_expansion(N)
     E = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
-    A = Matrix([[ZZ(g[o]) for o in range(1,N)], [E(o) for o in range(1,N)]])
+    A = Matrix([[ZZ(g[o]) for o in valid_ds], [E(o) for o in valid_ds]])
     # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
     # the first position of the vector in the kernel corresponds to a_1, and so on
-    L = IntegralLattice(N-1).sublattice(A.right_kernel().basis())
+    L = IntegralLattice(ZZ(len(valid_ds))).sublattice(A.right_kernel().basis())
     length_cap = 8
     all_vectors = sum(L.short_vectors(length_cap),[])
     ans = []
+    ans_expanded = []
     W = L.submodule(ans)
     i = 0
     while W.rank() < L.rank():
@@ -594,27 +730,41 @@ def vanishing_functional(N = 10):
         v = all_vectors[i]
         print(f'Adding {v = }')
         ans.append(v)
+        vexp = [0 for _ in range(1,N)]
+        for val, idx in zip(v, valid_ds):
+            vexp[idx-1] = val
+        ans_expanded.append(vexp)
         W = L.submodule(ans)
-    return ans
+    return ans_expanded
 
 def label_from_functional(func):
     pos = ''
     neg = ''
     for i, o in enumerate(func):
         if o > 0:
-            pos = pos + o * str(i+1)
-        else:
-            neg = neg + (-o) * str(i+1)
-    return pos + '_' + neg
+            pos = pos + o * ('.' + str(i+1))
+        elif o < 0:
+            neg = neg + (-o) * ('.' + str(i+1))
+    return pos[1:] + '_' + neg[1:]
 
 def functional_from_label(label):
-    func = [0 for _ in range(11)] # HARDCODED, DEBUG
+    func = {}
     pos, neg = label.split('_')
-    for i in pos:
-        func[int(i)-1] += 1
-    for i in neg:
-        func[int(i)-1] -= 1
-    return tuple(func)
+    for i in pos.split('.'):
+        try:
+            func[int(i)-1] += 1
+        except KeyError:
+            func[int(i)-1] = 1
+    for i in neg.split('.'):
+        try:
+            func[int(i)-1] -= 1
+        except KeyError:
+            func[int(i)-1] = -1
+    lfunc = max(func.keys()) + 1
+    ans = [0 for _ in range(lfunc)]
+    for ky, val in func.items():
+        ans[ky] = val
+    return tuple(ans)
 
 def initial_seed(v, p):
     if isinstance(v, str):
