@@ -570,7 +570,7 @@ def compute_gamma_tau(D):
             assert gamma_tau[1][0] % 2 == 0
             return gamma_tau
         n +=1
-
+# Labels for N = 10: ['4_8', '2_4', '37_6', '16_9', '19_278', '1249_67', '11234_6', '1555_368']
 def vanishing_functional(N = 10):
     g = ModularForms(20).cuspidal_subspace().gens()[0].q_expansion(N)
     E = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
