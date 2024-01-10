@@ -706,6 +706,7 @@ def sum_of_squares(n):
 def vanishing_functional(N = 20):
     # We only consider d with are not a norm from Z[i]
     valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
+
     g = ModularForms(20).cuspidal_subspace().gens()[0].q_expansion(N)
     E = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
     A = Matrix([[ZZ(g[o]) for o in valid_ds], [E(o) for o in valid_ds]])
