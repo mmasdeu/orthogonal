@@ -2,8 +2,8 @@
 from sage.rings.padics.precision_error import PrecisionError
 from multiprocessing import Process, Manager, Pool
 from concurrent import futures
+from sage.misc.timing import cputime
 from util import *
-
 
 # Related to Manin Trick
 
@@ -89,6 +89,8 @@ def all_elements_of_norm(F, n):
     if n == 0:
         return [F(0)]
     else:
+        eps = F.unit_group().gens()[0]
+        units = [F(eps**i) for i in range(eps.multiplicative_order())]
         return [u * beta for beta in F.elements_of_norm(n) for u in units]
 
 def vectors_in_lattice(n):
@@ -111,25 +113,24 @@ def vectors_in_lattice(n):
                         resm.append(-new_mat)
     return resp, resm, len(resp) - len(resm)
 
-def reduce2_mod(f):
-    t = f.parent().gen()
-    return sum(reduce_mod(o) * t**i for o, i in zip(f.coefficients(), f.exponents()))
+# def reduce2_mod(f):
+#     t = f.parent().gen()
+#     return sum(reduce_mod(o) * t**i for o, i in zip(f.coefficients(), f.exponents()))
 
-def reduce_mod(f):
-    t = f.parent().gen()
-    return sum((o % (p**M)) * t**i for o, i in zip(f.coefficients(), f.exponents()))
+# def reduce_mod(f):
+#     t = f.parent().gen()
+#     return sum((o % (p**M)) * t**i for o, i in zip(f.coefficients(), f.exponents()))
 
 def inv(FF):
     R = FF.parent()
     a0inv = ~Rp(FF(0)(0))
-    pw0 = 1-a0inv * FF
-    pw = 1
-    ans = 0
-    for n in range(M):
-        ans += pw
-        pw *= pw0
-    ans *= a0inv
-    return ans
+    y1 = 0
+    y = a0inv
+    while y != y1:
+        y1 = y
+        y = 2 * y1 - y1**2 * FF
+    return y
+
 
 @parallel(ncpus=ncpus)
 def compute_level1_contribution(A, Ap, sgn, Rp):
@@ -167,8 +168,8 @@ def compute_level1_contribution(A, Ap, sgn, Rp):
     ans = map_poly(ans)
     return j1, j2, ans, sgn
 
-def inv_par(kyFF):
-    ky, FF = kyFF
+def inv_par(kyFFM):
+    ky, FF, M = kyFFM
     R = FF.parent()
     a0inv = ~Rp(FF(0)(0))
     pw0 = 1-a0inv * FF
@@ -180,7 +181,7 @@ def inv_par(kyFF):
     ans *= a0inv
     return ky, ans
 
-def Level1(V):
+def Level1(V, M):
     res = {(i,j) : [Ruv(1), Ruv(1)] for i in range(p+1) for j in range(p+1)}
     dg = {(i,j) : 0 for i in range(p+1) for j in range(p+1)}
     pM = p**M
@@ -199,14 +200,14 @@ def Level1(V):
     with futures.ProcessPoolExecutor() as executor:
         # Calculate inverses
         print('Calculating inverses...')
-        future = {executor.submit(inv_par, (ky, val[1])) : ky for ky, val in res.items()}
+        future = {executor.submit(inv_par, (ky, val[1], M)) : ky for ky, val in res.items()}
         for fut in futures.as_completed(future):
             ky, val = fut.result()
             res[ky] = res[ky][0] * val
     return res, dg
 
 @cached_function
-def ApplySingle(A, i, z, check=True):
+def ApplySingle(A, i, z, M, check=True):
     a, b, c, d = A.change_ring(ZZ).list()
     if check:
         assert A.determinant().valuation() == 0, "Error in embeddings?"
@@ -238,47 +239,71 @@ def ApplySingle(A, i, z, check=True):
         substx *= sum(r**k for k in range(M+1))
     return ii, substx
 
+
 def Transform(outky):
     global gF, input_list
     res = Ruv(1)
     resinv = Ruv(1)
+    t1 = 0
+    t2 = 0
     for inky, s1, s2, sgn in input_list[outky]:
         f = gF[inky]
+        t = cputime()
         newres = sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
+        t1 += cputime(t)
+        t = cputime()
         if sgn == 1:
             res *= newres
         else:
             resinv *= newres
-    return res * inv(resinv)
+        t2 += cputime(t)
+    t = cputime()
+    ans = res * inv(resinv)
+    t3 = cputime(t)
+    return ans, (t1,t2,t3)
 
-def Next(F):
+def Next(F, timing=False):
     global gF
     gF = F
     res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
+    t1 = 0
+    t2 = 0
+    t3 = 0
     if parallelize:
         with futures.ProcessPoolExecutor() as executor:
             # Iteration
             future_dict = {executor.submit(Transform, outky) : outky for outky, inps in input_list.items()}
             for fut in futures.as_completed(future_dict):
                 outky = future_dict[fut]
-                res[outky] = fut.result()
+                ans, (t1p, t2p, t3p) = fut.result()
+                t1 += t1p
+                t2 += t2p
+                t3 += t3p
+                res[outky] = ans
     else:
         for outky, inps in input_list.items():
-            res[outky] = Transform(outky)
-    return res
+            res[outky] = Transform(outky)[0]
+    if timing:
+        return res, (t1, t2, t3)
+    else:
+        return res
 
 def mul_dict(x,y):
     return {ky : x[ky] * y[ky] for ky in x}
 
-def RMC(F):
+def RMC(F, M):
     FF = F
     res = [F]
     for j in range(1,M):
         print(f'Iteration {j}')
         t = walltime()
-        FF = Next(Next(FF))
+        FF0, (t1, t2, t3) = Next(FF,timing=True)
+        FF, (tt1, tt2, tt3) = Next(FF0,timing=True)
+        t1 += tt1
+        t2 += tt2
+        t3 += tt3
         res.append(FF)
-        print(f'..done in {walltime(t)} seconds.')
+        print(f'..done in {walltime(t)} seconds. {t1 = :.2f}, {t2 = :.2f}, {t3 = :.2f}')
     print(f'Now computing product...')
     t = walltime()
     if parallelize:
@@ -399,7 +424,7 @@ def Eval0(L0, tau):
     ans = prod((vv * num.apply_morphism(phi).apply_map(lambda o : KK(o)) * ww) / (vv * den.apply_morphism(phi).apply_map(lambda o : KK(o)) * ww) for num, den in zip(*L0))
     return ans
 
-def EvalPS(f, x0, x1, prec=M):
+def EvalPS(f, x0, x1, prec):
     ans = 1
     x0s = [1, x0]
     x1s = [1, x1]
@@ -408,7 +433,7 @@ def EvalPS(f, x0, x1, prec=M):
         x1s.append(x1 * x1s[-1])
     return sum(sum(o * x0s[j] for o, j in zip(a.coefficients(), a.exponents()) if j < prec) * x1s[i] for a, i in zip(f.coefficients(), f.exponents()) if i < prec)
 
-def Eval(tau, prec=M):
+def Eval(tau, prec):
     global J
     t0, t1 = tau
     ans = 1
@@ -418,6 +443,7 @@ def Eval(tau, prec=M):
         val = J[ky]
         ans *= EvalPS(val, x0, x1, prec)
     return ans
+
 
 def good_matrices(m):
     a, b, c, d = m.list()
@@ -471,7 +497,7 @@ def bigRMcycle(D, n=1):
     E = tau_ATR_field(alpha)
     return A, [tau0, tau1], E.class_number()
 
-def RMCEval(D, cycle_type = 'smallCM', prec=M, n=1, return_class_number=False):
+def RMCEval(D, cycle_type, prec, n=1, return_class_number=False):
     global L0, J
     if cycle_type == 'smallCM':
         A, tau0, hE = smallCMcycle(D)
@@ -494,21 +520,23 @@ def RMCEval(D, cycle_type = 'smallCM', prec=M, n=1, return_class_number=False):
             for fut in futures.as_completed(future_dict):
                 res1 *= fut.result()**(future_dict[fut])
     else:
-        res1 = prod(Eval(act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
+        res1 = prod(Eval(act_matrix(m.apply_morphism(phi).adjugate(), tau0), prec)**sgn for m,sgn in mlist)
+    ans = res0 * res1
+    ans = ans.add_bigoh(prec + ans.valuation())
     if return_class_number:
-        return (res0 * res1).add_bigoh(prec), hE
+        return ans, hE
     else:
-        return (res0 * res1).add_bigoh(prec)
+        return ans
 
-def list_powers(x, M,j):
+def list_powers(x, M):
     if x is None:
-        return j, x
+        return x
     plist = [x.parent()(1)]
     for i in range(M):
-        plist.append(x*plist[-1])
-    return j, plist
+        plist.append(x * plist[-1])
+    return plist
 
-def calculate_Tp_matrices(P):
+def calculate_Tp_matrices(P, M):
     global input_list
     Tplist = [matrix(2,2,[P, a, 0, 1]) for a in range(P.norm()) ] + [matrix(2,2,[1,0,0,P])]
     MS = []
@@ -534,10 +562,10 @@ def calculate_Tp_matrices(P):
         A = m.apply_morphism(phi)
         Aconj = mconj.apply_morphism(phi)
         for i in range(p+1):
-            ii, subst1 = ApplySingle(A, i, z1, check=False)
-            jj, subst2 = ApplySingle(Aconj, i, z2, check=True)
-            apply_single_dict[m,i,0] = list_powers(subst1,M,ii)
-            apply_single_dict[m,i,1] = list_powers(subst2,M,jj)
+            ii, subst1 = ApplySingle(A, i, z1, M, check=False)
+            jj, subst2 = ApplySingle(Aconj, i, z2, M, check=True)
+            apply_single_dict[m,i,0] = (ii, list_powers(subst1,M))
+            apply_single_dict[m,i,1] = (jj, list_powers(subst2,M))
 
     input_list = {(i,j) : list() for i in range(p+1) for j in range(p+1)}
     for m, sgn in MS:
@@ -648,11 +676,11 @@ def compute_gamma_tau_ATR(alpha):
     gamma = X^-1 * gamma * X
     Ms = [Matrix(2,2,[1,0,0,1]), Matrix(2,2,[0,1,-1,0]), Matrix(2,2,[2,1,1,1]), Matrix(2,2,[1+i,1,i,1]), Matrix(2,2,[1+i,1,1,1]), Matrix(2,2,[i,1,0,1]), Matrix(2,2,[i,1,2*i,1])]
     found = False
-    for M in Ms:
-        aa, bb, cc, dd = (M*gamma*M.inverse()).list()
+    for mm in Ms:
+        aa, bb, cc, dd = (mm * gamma * ~mm).list()
         if cc.real() % 2 == 0 and cc.imag() % 2== 0:
             found = True
-            gamma = M*gamma*M.inverse()
+            gamma = mm * gamma * ~mm
             break
     if not found:
         raise RuntimeError('maybe there is no embedding into Gamma0(2)?')
@@ -725,7 +753,8 @@ def vanishing_functional(N = 20):
             while L.submodule(ans + [all_vectors[i]]).rank() == W.rank():
                 i += 1
         except IndexError:
-            length_cap *= 2
+            length_cap *= 1.5
+            length_cap = ZZ(length_cap.ceil())
             all_vectors = sum(L.short_vectors(length_cap),[])
         v = all_vectors[i]
         print(f'Adding {v = }')
@@ -737,42 +766,13 @@ def vanishing_functional(N = 20):
         W = L.submodule(ans)
     return ans_expanded
 
-def label_from_functional(func):
-    pos = ''
-    neg = ''
-    for i, o in enumerate(func):
-        if o > 0:
-            pos = pos + o * ('.' + str(i+1))
-        elif o < 0:
-            neg = neg + (-o) * ('.' + str(i+1))
-    return pos[1:] + '_' + neg[1:]
-
-def functional_from_label(label):
-    func = {}
-    pos, neg = label.split('_')
-    for i in pos.split('.'):
-        try:
-            func[int(i)-1] += 1
-        except KeyError:
-            func[int(i)-1] = 1
-    for i in neg.split('.'):
-        try:
-            func[int(i)-1] -= 1
-        except KeyError:
-            func[int(i)-1] = -1
-    lfunc = max(func.keys()) + 1
-    ans = [0 for _ in range(lfunc)]
-    for ky, val in func.items():
-        ans[ky] = val
-    return tuple(ans)
-
 def initial_seed(v, p):
     if isinstance(v, str):
         v = functional_from_label(v)
     v = tuple(v)
     L0 = [[], []]
     V = [[], []]
-    for (im1, vi) in enumerate(v):
+    for im1, vi in enumerate(v):
         i = im1 + 1
         if vi > 0:
             Li = vectors_in_lattice(i)[:2]

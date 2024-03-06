@@ -1,3 +1,4 @@
+from copy import copy
 from sage.rings.all import ZZ,QQ,Qp,RR,CC,RealField
 from sage.matrix.all import matrix,Matrix
 from sage.algebras.quatalg.quaternion_algebra import QuaternionAlgebra
@@ -450,6 +451,7 @@ def our_lindep(V,prec = None, base=None, **kwargs):
     V = [K(o) for o in V]
     if prec is None:
         prec = min([o.precision_absolute() for o in V])
+    algorithm = kwargs.get('algorithm','pari')
     field_deg = K.degree()
     p = K.prime()
     pn = p**prec
@@ -467,7 +469,7 @@ def our_lindep(V,prec = None, base=None, **kwargs):
         M[n+i,-1-i] = pn
     verb_lev = get_verbose()
     # set_verbose(0)
-    tmp = M.transpose().change_ring(ZZ).right_kernel_matrix(proof=False, algorithm='pari')
+    tmp = M.transpose().change_ring(ZZ).right_kernel_matrix(proof=False, algorithm=algorithm)
     # set_verbose(verb_lev)
     verbose('Running LLL', level=2)
     tmp = tmp.LLL().row(0)
@@ -639,135 +641,133 @@ def recognize_DGL_algdep(J, degree, tolerance=0.9, prime_bound=None, roots_of_un
 def recognize_DGL_lindep(J, L, prime_list, Cp = None, units=None, outfile=None, **kwargs):
     r'''
     '''
+    recurse_subfields = kwargs.pop('recurse_subfields', False)
+    if recurse_subfields:
+        kwargs['phi'] = None
+        ans = None
+        for L0, _, _ in L.subfields():
+            try:
+                ans = recognize_DGL_lindep(J, L0, prime_list, Cp=Cp, units=units, outfile=outfile, **kwargs)
+            except ValueError:
+                pass
+            if ans is not None:
+                return ans
+        return None
     K = J.parent()
     p = K.prime()
-    prec = J.precision_absolute()
+    prec = J.precision_relative()
     # embed L in a field containing K
     if Cp is None:
         Cp = K
         K_to_Cp = K.hom([K.gen()])
     else:
         K_to_Cp = K.hom([polynomial_roots(K._exact_modulus(), Cp)[0]])
-    debug_idx = kwargs.pop('debug_idx', 0)
+    debug_idx = kwargs.get('debug_idx', 0)
     embeddings = polynomial_roots(L.polynomial(), Cp)
     if len(embeddings) == 0:
         raise ValueError(f'L (={L}) does not embed into Cp (={Cp})')
-    phi = kwargs.pop('phi', None)
-    if phi is None:
-        phi_list = []
-        for rt in embeddings:
-            phi = L.hom([rt])
-            xp = phi(L.gen())
-            xpconj = xp.trace() - xp
-            # We find sigma in Gal(L) such that it corresponds to conjugation in Cp.
-            found = False
-            for sigma in L.automorphisms():
-                if xpconj == phi(sigma(L.gen())):
-                    found = True
-                    break
-            if found:
-                phi_list.append((phi, sigma))
-        try:
-            phi, sigma = phi_list[debug_idx]
-        except IndexError:
-            raise ValueError(f'There are only {len(phi_list)} embeddings but debug_idx is {debug_idx}')
-    V = [None]
-    Vlogs = [K_to_Cp(J.log(0))]
-    W = ['J']
-    class_number = kwargs.get('class_number', None)
-    if class_number is not None:
-        for ell in prime_list:
-            ell_set = set([])
-            for pp, _ in L.ideal(ell).factor():
-                verbose(f'(Factoring {ell})')
-                gens = (pp**class_number).gens_reduced(proof=False)
-                assert len(gens) == 1, f'Wrong class number ( = {class_number}). Witness: {ell}'
-                if phi(gens[0]).valuation() == 0:
-                    ell_set.add(gens[0])
-            V += [g0 for g0 in ell_set]
-            Vlogs += [phi(g0).log(0) for g0 in ell_set]
-            W += [ell for _ in ell_set]
-    else:
-        hLlist = [1]
-        for ell in prime_list:
-            for pp, _ in L.ideal(ell).factor():
-                verbose(f'(Factoring {ell}')
-                hL = 0
-                gens = [None, None]
-                while len(gens) > 1:
-                    hL += 1
-                    gens = (pp**hL).gens_reduced(proof=False)
-                gens0 = gens[0]
-                phiv = phi(gens0)
-                if phiv.valuation() == 0:
-                    hLlist.append(hL)
-                    V.append(gens0)
-                    Vlogs.append(phiv.log(0))
-                    W.append(ell)
-        hL = lcm(hLlist)
-        assert len(V) == len(hLlist)
-        V = [None] + [o**(hL / e) for o, e in zip(V[1:], hLlist[1:])]
-        Vlogs = [Vlogs[0]] + [(hL / e) * o for o, e in zip(Vlogs[1:], hLlist[1:])]
+    phi_list = kwargs.get('phi_list', None)
+    if phi_list is None:
+        phi_list = [L.hom([rt]) for rt in embeddings]
 
-    # Add units
-    if units is None:
-        units = list(L.units(proof=False))
-    else:
-        units = [L(o) for o in units]
-    for i, u in enumerate(units):
-        V.append(u)
-        Vlogs.append(phi(u).log(0))
-        W.append(f'u{i}')
+    for phi in phi_list:
+        V = [None]
+        Vlogs = [K_to_Cp(J.log(0))]
+        W = ['J']
+        class_number = kwargs.get('class_number', None)
+        if class_number is not None:
+            for ell in prime_list:
+                ell_set = set([])
+                for pp, _ in L.ideal(ell).factor():
+                    verbose(f'(Factoring {ell})',level=2)
+                    gens = (pp**class_number).gens_reduced(proof=False)
+                    assert len(gens) == 1, f'Wrong class number ( = {class_number}). Witness: {ell}'
+                    if phi(gens[0]).valuation() == 0:
+                        ell_set.add(gens[0])
+                V += [g0 for g0 in ell_set]
+                Vlogs += [phi(g0).log(0) for g0 in ell_set]
+                W += [ell for _ in ell_set]
+        else:
+            hLlist = [1]
+            for ell in prime_list:
+                for pp, _ in L.ideal(ell).factor():
+                    verbose(f'(Factoring {ell}')
+                    hL = 0
+                    gens = [None, None]
+                    while len(gens) > 1:
+                        hL += 1
+                        gens = (pp**hL).gens_reduced(proof=False)
+                    gens0 = gens[0]
+                    phiv = phi(gens0)
+                    if phiv.valuation() == 0:
+                        hLlist.append(hL)
+                        V.append(gens0)
+                        Vlogs.append(phiv.log(0))
+                        W.append(ell)
+            hL = lcm(hLlist)
+            assert len(V) == len(hLlist)
+            V = [None] + [o**(hL / e) for o, e in zip(V[1:], hLlist[1:])]
+            Vlogs = [Vlogs[0]] + [(hL / e) * o for o, e in zip(Vlogs[1:], hLlist[1:])]
 
-    # Truncate precision if prec is specified
-    prec = kwargs.get('prec',prec)
-    if prec is not None:
-        Vlogs = [o.add_bigoh(prec) for o in Vlogs]
+        # Add units
+        if units is None:
+            units = list(L.units(proof=False))
+        else:
+            units = [L(o) for o in units]
+        for i, u in enumerate(units):
+            V.append(u)
+            Vlogs.append(phi(u).log(0))
+            W.append(f'u{i}')
 
-    # OK now cross fingers...
-    clist = kwargs.get('clist', None)
-    if clist is not None:
-        assert len(clist) == len(Vlogs), f'Provided clist is of incorrect length (should be {len(Vlogs)})'
-        return sum([c * o for c, o in zip(clist, Vlogs)])
-    verbose(f'Running lindep with {len(Vlogs) = }')
-    clist = our_lindep(Vlogs, **kwargs)
-    verbose(f'clist = {clist}')
-    verbose(f'W = {W}')
-    verbose(f'Should be zero : {sum([c * o for c, o in zip(clist, Vlogs)])}')
-    if clist[0] < 0:
-        clist = [-o for o in clist]
-    if clist[0] == 0:
-        verbose(f'Not recognized: clist[0] = {clist[0]}')
-        return None
-    ht = 2 * sum((1+RR(o).abs()).log(p) for o in clist)
-    verbose(f'(confidence factor: { ht / prec})')
-    if ht > prec:
-        verbose(f'Not recognized (confidence factor: ht / prec = {ht / prec}): clist = {clist}')
-        return None
-    clist_ans = [(u,v) for u,v in zip(clist,W) if u != 0]
-    fwrite("# SUCCESS!", outfile)
-    fwrite(f'# {clist_ans}', outfile)
-    algebraic = kwargs.get('algebraic', True)
-    if not algebraic:
-        return clist_ans
-    else:
-        verbose(str(clist_ans))
-        if not clist[0] > 0:
-            verbose(f'Redundant set of primes?')
+        # Truncate precision if prec is specified
+        prec = kwargs.get('prec',prec)
+        if prec is not None:
+            Vlogs = [o.add_bigoh(prec) for o in Vlogs]
+
+        # OK now cross fingers...
+        clist = kwargs.get('clist', None)
+        if clist is not None:
+            assert len(clist) == len(Vlogs), f'Provided clist is of incorrect length (should be {len(Vlogs)})'
+            return sum([c * o for c, o in zip(clist, Vlogs)])
+        verbose(f'Running lindep with {len(Vlogs) = }')
+        clist = our_lindep(Vlogs, **kwargs)
+        verbose(f'clist = {clist}')
+        verbose(f'W = {W}')
+        verbose(f'Should be zero : {sum([c * o for c, o in zip(clist, Vlogs)])}')
+        if clist[0] < 0:
+            clist = [-o for o in clist]
+        if clist[0] == 0:
+            verbose(f'Not recognized: clist[0] = {clist[0]}')
             return None
-        fact = Factorization([(u,-a) for u, a in zip(V[1:],clist[1:])])
-        assert len(V) == len(clist)
-        # assert clist[0] % hL == 0
-        hL = 1 # DEBUG
-        J_alg = fact.prod() # DEBUG # (L['x'].gen()**hL - fact.prod()).roots(L)[0][0]
-        remainder = clist[0] // hL
-        try:
-            check = (phi(J_alg) / K_to_Cp(J)**remainder).log(0).valuation() >= prec
-            if not check:
-                print('Did not pass check! Returning value anyway...')
-        except ValueError as e:
-            print('Did not pass check because it errored! (error = %s)'%str(e))
-        return J_alg, remainder, fact, clist_ans, phi, K_to_Cp  # DEBUG - didn't check that they match...
+        ht = 2 * sum((1+RR(o).abs()).log(p) for o in clist)
+        verbose(f'(confidence factor: { ht / prec})')
+        if ht > prec:
+            verbose(f'Not recognized (confidence factor: ht / prec = {ht / prec}): clist = {clist}')
+            return None
+        clist_ans = [(u,v) for u,v in zip(clist,W) if u != 0]
+        fwrite("# SUCCESS!", outfile)
+        fwrite(f'# {clist_ans}', outfile)
+        algebraic = kwargs.get('algebraic', True)
+        if not algebraic:
+            return clist_ans
+        else:
+            verbose(str(clist_ans))
+            if not clist[0] > 0:
+                verbose(f'Redundant set of primes?')
+                return None
+            fact = Factorization([(u,-a) for u, a in zip(V[1:],clist[1:])])
+            assert len(V) == len(clist)
+            # assert clist[0] % hL == 0
+            hL = 1 # DEBUG
+            J_alg = fact.prod() # DEBUG # (L['x'].gen()**hL - fact.prod()).roots(L)[0][0]
+            remainder = clist[0] // hL
+            try:
+                check = (phi(J_alg) / K_to_Cp(J)**remainder).log(0).valuation() >= prec
+                if not check:
+                    print('Did not pass check! Returning value anyway...')
+            except ValueError as e:
+                print('Did not pass check because it errored! (error = %s)'%str(e))
+            return J_alg.minpoly(), remainder, fact, clist_ans, gp.polredabs(J_alg.parent().polynomial()), phi, K_to_Cp  # DEBUG - didn't check that they match...
 
 def recognize_DV_algdep(J, degree, height_threshold=None, prime_bound=None, roots_of_unity=None, outfile=None):
     K = J.parent()
