@@ -3,6 +3,17 @@ from util import *
 from fire import Fire
 from sage.all import QuadraticField, load, Integer, RealNumber, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq, srange
 # Calculate DGL periods
+r'''
+['12_24', # 300, in progress 400 (a05, it 20)
+ '6_12', # 300, in progress 400 (a08) (restarted)
+ '11_12', # 300, in progress 400 (a03, it 35)
+ '3·7_12', # 300, in progress 400 (a10, still in Next phase)
+ '14·24_22', # 400
+ '19·24_21', # 400
+ '6·24_14', # 300, in progress 400 (a04, it 51, about 12 minutes)
+ '7·22_19·23', # 400
+ '3·14_7·19'] # 300, in progress 400 (a09, restarted)
+'''
 
 ncpus = 128
 parallelize = True
