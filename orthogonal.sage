@@ -111,7 +111,8 @@ def vectors_in_lattice(n):
                         resp.append(new_mat)
                     elif a % 4 == 3:
                         resm.append(-new_mat)
-    return resp, resm, len(resp) - len(resm)
+    # assert len(resp) == len(resm)
+    return resp, resm
 
 # def reduce2_mod(f):
 #     t = f.parent().gen()
@@ -731,13 +732,17 @@ def sum_of_squares(n):
     return all(e % 2 == 0 for p, e in ZZ(n).factor() \
                if p % 4 == 3)
 
-def vanishing_functional(N = 20):
+def vanishing_functional(p, N = 20):
     # We only consider d with are not a norm from Z[i]
     valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
 
-    g = ModularForms(20).cuspidal_subspace().gens()[0].q_expansion(N)
+    MM = []
+    for g0 in ModularForms(4*p).cuspidal_subspace().gens():
+        g = list(g0.q_expansion(N+1))
+        l = lcm([QQ(o).denominator() for o in g])
+        MM.append([l * o for o in g])
     E = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
-    A = Matrix([[ZZ(g[o]) for o in valid_ds], [E(o) for o in valid_ds]])
+    A = Matrix([[E(o) for o in valid_ds]] + [[ZZ(g[o]) for o in valid_ds] for g in MM])
     # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
     # the first position of the vector in the kernel corresponds to a_1, and so on
     L = IntegralLattice(ZZ(len(valid_ds))).sublattice(A.right_kernel().basis())
@@ -756,7 +761,10 @@ def vanishing_functional(N = 20):
             length_cap *= 1.5
             length_cap = ZZ(length_cap.ceil())
             all_vectors = sum(L.short_vectors(length_cap),[])
-        v = all_vectors[i]
+        try:
+            v = all_vectors[i]
+        except IndexError:
+            continue
         print(f'Adding {v = }')
         ans.append(v)
         vexp = [0 for _ in range(1,N)]
@@ -775,19 +783,21 @@ def initial_seed(v, p):
     for im1, vi in enumerate(v):
         i = im1 + 1
         if vi > 0:
-            Li = vectors_in_lattice(i)[:2]
-            Vi = vectors_in_lattice(p * i)[:2]
+            Li = vectors_in_lattice(i)
+            Vi = vectors_in_lattice(p * i)
             L0[0].extend(vi * Li[0])
             L0[1].extend(vi * Li[1])
             V[0].extend(vi * Vi[0])
             V[1].extend(vi * Vi[1])
         elif vi < 0:
-            Li = vectors_in_lattice(i)[:2]
-            Vi = vectors_in_lattice(p * i)[:2]
+            Li = vectors_in_lattice(i)
+            Vi = vectors_in_lattice(p * i)
             L0[1].extend((-vi) * Li[0])
             L0[0].extend((-vi) * Li[1])
             V[1].extend((-vi) * Vi[0])
             V[0].extend((-vi) * Vi[1])
+    assert len(L0[0]) == len(L0[1])
+    assert len(V[0]) == len(V[1])
     return L0, V
 
 

@@ -4,20 +4,20 @@ from fire import Fire
 from sage.all import QuadraticField, load, Integer, RealNumber, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq, srange
 # Calculate DGL periods
 r'''
-['12_24', # 300, in progress 400 (a05, it 20)
- '6_12', # 300, in progress 400 (a08) (restarted)
- '11_12', # 300, in progress 400 (a03, it 35)
- '3·7_12', # 300, in progress 400 (a10, still in Next phase)
+['12_24', # 400
+ '6_12', # 400
+ '11_12', # 400
+ '3·7_12', # 400
  '14·24_22', # 400
  '19·24_21', # 400
- '6·24_14', # 300, in progress 400 (a04, it 51, about 12 minutes)
+ '6·24_14', # 400
  '7·22_19·23', # 400
- '3·14_7·19'] # 300, in progress 400 (a09, restarted)
+ '3·14_7·19'] # 300, in progress 400 (a04, restarted)
 '''
 
 ncpus = 128
 parallelize = True
-p = 5
+# p = 5
 F = QuadraticField(-1, names='r')
 
 def label_from_functional(func, sep='·'):
@@ -49,8 +49,10 @@ def functional_from_label(label, sep='·'):
         ans[ky] = val
     return tuple(ans)
 
-def cocycle(label : str, M : int, fname=None):
-    global L0, J, p, F, ncpus, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
+def cocycle(q : int, label : str, M : int, fname=None):
+    global L0, p, J, F, ncpus, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
+    p = ZZ(q)
+    print(f'{p = }')
     print(f'{label = }')
     w = 1 + 2 * F.gen()
     Fp = Qp(p,2*M, type='floating-point')
@@ -64,7 +66,7 @@ def cocycle(label : str, M : int, fname=None):
     load('orthogonal.sage')
 
     if fname is None:
-        fname = f'L0Jtuple_{label}_{M}.sobj'
+        fname = f'L0Jtuple_{p}_{label}_{M}.sobj'
     if isinstance(label, str):
         label = functional_from_label(label)
     L0, V = initial_seed(label, p)
@@ -83,16 +85,16 @@ def cocycle(label : str, M : int, fname=None):
     J = RMC(F2, M)
     print('..saving...')
     label = label_from_functional(label)
-    save((L0, J), f'L0Jtuple_{label}_{M}.sobj')
+    save((L0, J), fname)
     print(f'Finished in {walltime(t)} seconds')
 
-def evaluate(label : str, D, cycle_type : str, M : int, fname=None):
+def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
     global L0, J, p, F, ncpus, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
+    p = q
     if fname is None:
         if not isinstance(label, str):
             label = label_from_functional(label)
-        fname = f'L0Jtuple_{label}_{M}.sobj'
-    L0, J = load(fname)
+        fname = f'L0Jtuple_{p}_{label}_{M}.sobj'
     if isinstance(D,tuple):
         D, n = D
     else:
@@ -107,6 +109,7 @@ def evaluate(label : str, D, cycle_type : str, M : int, fname=None):
     inv_map_poly = Ruv.flattening_morphism()
     map_poly = inv_map_poly.inverse()
     load('orthogonal.sage')
+    L0, J = load(fname)
     x = RMCEval(D, cycle_type, M, n)
     if __name__ == '__main__':
         print(x)
