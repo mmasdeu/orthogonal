@@ -1,6 +1,6 @@
 # from tqdm import tqdm
 from sage.rings.padics.precision_error import PrecisionError
-from multiprocessing import Process, Manager, Pool
+from multiprocessing import Process, Manager, Pool, cpu_count
 from concurrent import futures
 from sage.misc.timing import cputime
 from util import *
@@ -54,7 +54,6 @@ def compute_convergents(cf):
 # given the convergents [p_i] and [q_j] of a continued fraction for alpha, computes the matrices that Mi such that {Infinity, alpha} = {M0(0), M0(Infinity)} + {M1(0), M1(Infinity)} + ... as in display (2.1.8) of Cremona's book
 def compute_Ms(p, q):
     Ms = []
-    # Ms.append(Matrix(2,2,[1,0,0,1])) # j = -1, not necessary since we do (Infinity, alpha) instead of (0, alpha) 
     Ms.append(Matrix(2,2,[-p[0], 1, -q[0], 0])) # j = 0
     for j in range(1, len(p)):
         Ms.append(Matrix(2,2,[(-1)^(j-1)*p[j],p[j-1],(-1)^(j-1)*q[j],q[j-1]]))
@@ -98,29 +97,20 @@ def vectors_in_lattice(n):
     resm = []
     for mac in range(1,n+1):
         RHS = n - mac
+        betas = all_elements_of_norm(F, RHS)
         for mc in divisors(mac):
             a = mac // mc
-            for beta in all_elements_of_norm(F, RHS):
-                if a % p == 0 and \
-                   mc % p == 0 and \
-                   (beta / p).is_integral():
+            condition = a % p == 0 and mc % p == 0
+            for beta in betas:
+                if condition and (beta / p).is_integral():
                     continue
                 else:
-                    new_mat = Matrix(F,2,2,[beta.conjugate(), mc, a, -beta])
+                    new_mat = Matrix([[beta.conjugate(), mc], [a, -beta]])
                     if a % 4 == 1:
                         resp.append(new_mat)
                     elif a % 4 == 3:
                         resm.append(-new_mat)
-    # assert len(resp) == len(resm)
     return resp, resm
-
-# def reduce2_mod(f):
-#     t = f.parent().gen()
-#     return sum(reduce_mod(o) * t**i for o, i in zip(f.coefficients(), f.exponents()))
-
-# def reduce_mod(f):
-#     t = f.parent().gen()
-#     return sum((o % (p**M)) * t**i for o, i in zip(f.coefficients(), f.exponents()))
 
 def inv(FF):
     R = FF.parent()
@@ -129,11 +119,11 @@ def inv(FF):
     y = a0inv
     while y != y1:
         y1 = y
-        y = 2 * y1 - y1**2 * FF
+        y = y1 * (2 - y1 * FF)
     return y
 
 
-@parallel(ncpus=ncpus)
+@parallel(ncpus=cpu_count())
 def compute_level1_contribution(A, Ap, sgn, Rp):
     Rpol = PolynomialRing(F,2,names='u,v')
     t1, t2 = Rpol.gens()
@@ -169,23 +159,9 @@ def compute_level1_contribution(A, Ap, sgn, Rp):
     ans = map_poly(ans)
     return j1, j2, ans, sgn
 
-def inv_par(kyFFM):
-    ky, FF, M = kyFFM
-    R = FF.parent()
-    a0inv = ~Rp(FF(0)(0))
-    pw0 = 1-a0inv * FF
-    pw = 1
-    ans = 0
-    for n in range(M):
-        ans += pw
-        pw *= pw0
-    ans *= a0inv
-    return ky, ans
-
 def Level1(V, M):
     res = {(i,j) : [Ruv(1), Ruv(1)] for i in range(p+1) for j in range(p+1)}
     dg = {(i,j) : 0 for i in range(p+1) for j in range(p+1)}
-    pM = p**M
     input_vec = []
     for (A, B) in zip(*V):
         Ap = A.apply_map(lambda x : Rp(phi(x).lift()))
@@ -201,9 +177,10 @@ def Level1(V, M):
     with futures.ProcessPoolExecutor() as executor:
         # Calculate inverses
         print('Calculating inverses...')
-        future = {executor.submit(inv_par, (ky, val[1], M)) : ky for ky, val in res.items()}
+        future = {executor.submit(inv, val[1]) : ky for ky, val in res.items()}
         for fut in futures.as_completed(future):
-            ky, val = fut.result()
+            ky = future[fut]
+            val = fut.result()
             res[ky] = res[ky][0] * val
     return res, dg
 
@@ -292,6 +269,11 @@ def Next(F, timing=False):
 def mul_dict(x,y):
     return {ky : x[ky] * y[ky] for ky in x}
 
+def degrees(res):
+    dumax = max(ff.degree() for ff in res.values())
+    dvmax = max(o.degree() for ff in res.values() for o in ff.coefficients())
+    return dumax, dvmax
+
 def RMC(F, M):
     FF = F
     res = [F]
@@ -304,7 +286,8 @@ def RMC(F, M):
         t2 += tt2
         t3 += tt3
         res.append(FF)
-        print(f'..done in {walltime(t)} seconds. {t1 = :.2f}, {t2 = :.2f}, {t3 = :.2f}')
+        d = degrees(FF)
+        print(f'..done in {walltime(t)} seconds. {t1 = :.2f}, {t2 = :.2f}, {t3 = :.2f}. Degrees: {d}')
     print(f'Now computing product...')
     t = walltime()
     if parallelize:
@@ -321,90 +304,6 @@ def RMC(F, M):
     R0 = Ruv.base_ring()
     psi = R0.hom([ZZ['u'].gen()],base_map=lambda x:x.lift(),check=False)
     ans = {ky : f.change_ring(psi) for ky, f in ans.items()}
-    return ans
-
-def solve_quadratic(f, K = None, return_all = False):
-    a,b,c = f[2], f[1], f[0]
-    if f.degree() != 2:
-        raise ValueError
-    disc = b*b-4*a*c
-    discrt = our_sqrt(disc,K,False)
-    if return_all:
-        return [(-b + discrt)/(2*a), (-b - discrt)/(2*a)]
-    else:
-        return (-b + discrt)/(2*a)
-
-def our_sqrt(xx,K = None,return_all = False):
-    if K is None:
-        K = xx.parent()
-    else:
-        xx = K(xx)
-    if xx == 0:
-        if return_all:
-            return [xx]
-        else:
-            return xx
-    p=K.base_ring().prime()
-    prec = K.precision_cap()
-    valp = xx.valuation()
-    valpi = xx.ordp()
-    try:
-        eK = K.ramification_index()
-    except AttributeError:
-        eK = 1
-    if valp * eK % 2 != 0:
-        if return_all:
-            return []
-        else:
-            raise ValueError('Not a square')
-    x = K.uniformizer()**(-valp) * xx
-    try:
-        z = K.unramified_generator()
-    except AttributeError:
-        z = K.gen()
-    deg = K.residue_class_field().degree()
-    found = False
-    if p != 2:
-        ppow = p if p != 2 else 8
-        minval = 1 if p != 2 else 3
-        for avec in cartesian_product_iterator([srange(ppow) for _ in range(deg)]):
-            y0 = K(avec[0])
-            for a in avec[1:]:
-                y0 = y0*z + K(a)
-            if (y0**2-x).valuation() >= minval:
-                found = True
-                break
-        if found == False:
-            if return_all:
-                return []
-            else:
-                raise ValueError('Not a square: %s'%x)
-        y, y1 = 0, y0
-        while y != y1:
-            y, y1 = y1, (y1+x/y1)/2
-    else:
-        ppow = 8
-        minval = 1
-        for avec in cartesian_product_iterator([srange(ppow) for _ in range(deg)]):
-            y0 = K(avec[0])
-            for a in avec[1:]:
-                y0 = y0*z + K(a)
-            if (y0**2-y0 + (1-x)/4).valuation() >= minval:
-                found = True
-                break
-        if found == False:
-            if return_all:
-                return []
-            else:
-                raise ValueError('Not a square: %s'%x)
-        y, y1 = 0, y0
-        while y != y1:
-            y, y1 = y1, (y1**2 - (1-x)/4)/(2*y1 - 1) #(y1+x/y1)/2
-        y = 2 * y - 1
-    ans = K.uniformizer()**(ZZ(valp/2)) * y
-    assert ans**2 == xx
-    if return_all:
-        ans = [ans, -ans]
     return ans
 
 def fixed_point(g, phi):
@@ -441,8 +340,7 @@ def Eval(tau, prec):
     for ky in J:
         x0 = t0 if ky[0] == p else 1/(t0 - ky[0])
         x1 = t1 if ky[1] == p else 1/(t1 - ky[1])
-        val = J[ky]
-        ans *= EvalPS(val, x0, x1, prec)
+        ans *= EvalPS(J[ky], x0, x1, prec)
     return ans
 
 
@@ -554,8 +452,6 @@ def calculate_Tp_matrices(P, M):
     R = S.base_ring()
     z1 = R.gen()
     z2 = S.gen()
-    future = {}
-    cnt = 0
     for cnt, (m, sgn) in enumerate(MS):
         update_progress(float(cnt)/len(MS))
         m.set_immutable()
@@ -612,12 +508,15 @@ def compute_gamma_tau(D):
     assert D1[1][0] % 2 == 0
     # now we find the fundamental unit of O_c
     eps = F.units()[0]
+    if eps.norm() == -1:
+        eps = eps**2 # DEBUG: is this really needed?
     n = 1
     while True:
-        cs = coords(eps**n)
+        u = eps**n
+        cs = coords(u)
         if all([o.is_integer() for o in cs]):
             gamma_tau = cs[0] + cs[1] * D1
-            assert gamma_tau.minpoly() == (eps^n).minpoly()
+            assert gamma_tau.minpoly() == u.minpoly()
             assert gamma_tau[1][0] % 2 == 0
             return gamma_tau
         n +=1
@@ -728,16 +627,14 @@ def compute_gamma_tau_ATR(alpha):
 
 
 
-def sum_of_squares(n):
-    return all(e % 2 == 0 for p, e in ZZ(n).factor() \
-               if p % 4 == 3)
 
-def vanishing_functional(p, N = 20):
+def functional_old(p, N = 20):
     # We only consider d with are not a norm from Z[i]
     valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
 
     MM = []
-    for g0 in ModularForms(4*p).cuspidal_subspace().gens():
+    MFs = ModularForms(4*p).cuspidal_subspace().gens()
+    for g0 in MFs:
         g = list(g0.q_expansion(N+1))
         l = lcm([QQ(o).denominator() for o in g])
         MM.append([l * o for o in g])
@@ -774,24 +671,22 @@ def vanishing_functional(p, N = 20):
         W = L.submodule(ans)
     return ans_expanded
 
+
 def initial_seed(v, p):
     if isinstance(v, str):
         v = functional_from_label(v)
     v = tuple(v)
     L0 = [[], []]
     V = [[], []]
-    for im1, vi in enumerate(v):
-        i = im1 + 1
+    for i, vi in enumerate(v, start=1):
+        Li = vectors_in_lattice(i)
+        Vi = vectors_in_lattice(p * i)
         if vi > 0:
-            Li = vectors_in_lattice(i)
-            Vi = vectors_in_lattice(p * i)
             L0[0].extend(vi * Li[0])
             L0[1].extend(vi * Li[1])
             V[0].extend(vi * Vi[0])
             V[1].extend(vi * Vi[1])
         elif vi < 0:
-            Li = vectors_in_lattice(i)
-            Vi = vectors_in_lattice(p * i)
             L0[1].extend((-vi) * Li[0])
             L0[0].extend((-vi) * Li[1])
             V[1].extend((-vi) * Vi[0])

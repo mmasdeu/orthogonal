@@ -1,23 +1,9 @@
-# from sage.all_cmdline import *
 from util import *
 from fire import Fire
-from sage.all import QuadraticField, load, Integer, RealNumber, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq, srange
+from sage.all import QuadraticField, load, Integer, RealNumber, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq, srange, ModularForms, IntegralLattice
 # Calculate DGL periods
-r'''
-['12_24', # 400
- '6_12', # 400
- '11_12', # 400
- '3·7_12', # 400
- '14·24_22', # 400
- '19·24_21', # 400
- '6·24_14', # 400
- '7·22_19·23', # 400
- '3·14_7·19'] # 300, in progress 400 (a04, restarted)
-'''
 
-ncpus = 128
 parallelize = True
-# p = 5
 F = QuadraticField(-1, names='r')
 
 def label_from_functional(func, sep='·'):
@@ -50,7 +36,7 @@ def functional_from_label(label, sep='·'):
     return tuple(ans)
 
 def cocycle(q : int, label : str, M : int, fname=None):
-    global L0, p, J, F, ncpus, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
+    global L0, p, J, F, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
     p = ZZ(q)
     print(f'{p = }')
     print(f'{label = }')
@@ -89,7 +75,7 @@ def cocycle(q : int, label : str, M : int, fname=None):
     print(f'Finished in {walltime(t)} seconds')
 
 def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
-    global L0, J, p, F, ncpus, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
+    global L0, J, p, F, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
     p = q
     if fname is None:
         if not isinstance(label, str):
@@ -116,5 +102,53 @@ def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
     else:
         return x
 
+def sum_of_squares(n):
+    return all(e % 2 == 0 for p, e in ZZ(n).factor() \
+               if p % 4 == 3)
+
+def functional(p, N = 20):
+    # We only consider d with are not a norm from Z[i]
+    valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
+
+    MM = []
+    MFs = ModularForms(4*p).gens()
+    for g0 in MFs:
+        g = list(g0.q_expansion(N+1))
+        l = lcm([QQ(o).denominator() for o in g])
+        MM.append([l * o for o in g])
+    A = Matrix([[QQ(g[o]) for o in valid_ds] for g in MFs])
+    l = lcm([QQ(o).denominator() for o in A.list()])
+    A = (l * A).change_ring(ZZ)
+    # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
+    # the first position of the vector in the kernel corresponds to a_1, and so on
+    L = IntegralLattice(ZZ(len(valid_ds))).sublattice(A.right_kernel().basis())
+    length_cap = 8
+    all_vectors = sum(L.short_vectors(length_cap),[])
+    ans = []
+    ans_expanded = []
+    W = L.submodule(ans)
+    i = 0
+    while W.rank() < L.rank():
+        verbose(W.rank(),L.rank())
+        try:
+            while L.submodule(ans + [all_vectors[i]]).rank() == W.rank():
+                i += 1
+        except IndexError:
+            length_cap *= QQ(3)/2
+            length_cap = ZZ(length_cap.ceil())
+            all_vectors = sum(L.short_vectors(length_cap),[])
+        try:
+            v = all_vectors[i]
+        except IndexError:
+            continue
+        verbose(f'Adding {v = }')
+        ans.append(v)
+        vexp = [0 for _ in range(1,N)]
+        for val, idx in zip(v, valid_ds):
+            vexp[idx-1] = val
+        ans_expanded.append(vexp)
+        W = L.submodule(ans)
+    return [label_from_functional(o) for o in ans_expanded]
+
 if __name__ == '__main__':
-  Fire({'cocycle': cocycle,'evaluate': evaluate})
+  Fire({'cocycle': cocycle,'evaluate': evaluate,'functional':functional})
