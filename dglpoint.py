@@ -40,7 +40,7 @@ def cocycle(q : int, label : str, M : int, fname=None):
     p = ZZ(q)
     print(f'{p = }')
     print(f'{label = }')
-    w = 1 + 2 * F.gen()
+    w = F.elements_of_norm(p)[0]
     Fp = Qp(p,2*M, type='floating-point')
     Rp = Zmod(p**M)
     phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
@@ -69,8 +69,7 @@ def cocycle(q : int, label : str, M : int, fname=None):
     ### RMC
     t = walltime()
     J = RMC(F2, M)
-    print('..saving...')
-    label = label_from_functional(label)
+    print(f'Saving to {fname}...')
     save((L0, J), fname)
     print(f'Finished in {walltime(t)} seconds')
 
@@ -85,7 +84,7 @@ def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
         D, n = D
     else:
         n = 1
-    w = 1 + 2 * F.gen()
+    w = F.elements_of_norm(p)[0]
     Fp = Qp(p,2*M, type='floating-point')
     Rp = Zmod(p**M)
     phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
@@ -150,5 +149,46 @@ def functional(p, N = 20):
         W = L.submodule(ans)
     return [label_from_functional(o) for o in ans_expanded]
 
+
+def check_cocycle(L0, J, M, version=2):
+    if version == 2:
+        mlist = [Matrix(QQ,2,2,1), Matrix(QQ,2,2,[0,-1,1,0])]
+    else:
+        U = Matrix(QQ,2,2,[0,1,-1,1])
+        mlist = [Matrix(QQ,2,2,1), U, U**2]
+    apply_single_dict = {}
+    S = Ruv
+    R = S.base_ring()
+    z1 = R.gen()
+    z2 = S.gen()
+    for m in mlist:
+        m.set_immutable()
+        A = m.apply_morphism(phi)
+        for i in range(p+1):
+            ii, subst1 = ApplySingle(A, i, z1, M, check=False)
+            jj, subst2 = ApplySingle(A, i, z2, M, check=True)
+            apply_single_dict[m,i,0] = (ii, list_powers(subst1,M))
+            apply_single_dict[m,i,1] = (jj, list_powers(subst2,M))
+
+    input_list = {(i,j) : list() for i in range(p+1) for j in range(p+1)}
+    for m in mlist:
+        for inky0 in range(p+1):
+            outky0, s1 = apply_single_dict[(m, inky0, 0)]
+            if s1 is None:
+                continue
+            for inky1 in range(p+1):
+                inky = (inky0, inky1)
+                outky1, s2 = apply_single_dict[(m, inky1, 1)]
+                if s2 is None:
+                    continue
+                outky = (outky0, outky1)
+                input_list[outky].append((inky, s1, s2))
+    res = Ruv(1)
+    for inky, s1, s2 in input_list[outky]:
+        f = gF[inky]
+        res *= sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
+    return res
+
 if __name__ == '__main__':
   Fire({'cocycle': cocycle,'evaluate': evaluate,'functional':functional})
+

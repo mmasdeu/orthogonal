@@ -228,6 +228,8 @@ def Transform(outky):
         f = gF[inky]
         t = cputime()
         newres = sum(sum(aij * s1[j] for aij, j in zip(fi.coefficients(), fi.exponents())) * s2[i] for fi, i in zip(f.coefficients(), f.exponents()))
+        # a00inv = ~Rp(newres(0)(0)) # Normalize
+        # newres *= a00inv
         t1 += cputime(t)
         t = cputime()
         if sgn == 1:
@@ -306,6 +308,22 @@ def RMC(F, M):
     ans = {ky : f.change_ring(psi) for ky, f in ans.items()}
     return ans
 
+def RMC_noprod(F, M):
+    FF = F
+    res = [F]
+    for j in range(1,M):
+        print(f'Iteration {j}')
+        t = walltime()
+        FF0, (t1, t2, t3) = Next(FF,timing=True)
+        FF, (tt1, tt2, tt3) = Next(FF0,timing=True)
+        t1 += tt1
+        t2 += tt2
+        t3 += tt3
+        res.append(FF)
+        d = degrees(FF)
+        print(f'..done in {walltime(t)} seconds. {t1 = :.2f}, {t2 = :.2f}, {t3 = :.2f}. Degrees: {d}')
+    return res
+
 def fixed_point(g, phi):
     a, b, c, d = g.list()
     K = g.parent()
@@ -371,7 +389,7 @@ def good_matrices(m):
                 assert m1.determinant() == 1
                 assert m2.determinant() == 1
                 return [(m1,1),(m2,-1)]
-    raise RuntimeError('No matrix found!')
+    raise RuntimeError(f'No good matrix found for m = {m.list()}!')
 
 def smallCMcycle(D):
     A = compute_gamma_tau(D).change_ring(F)
@@ -434,6 +452,8 @@ def list_powers(x, M):
     for i in range(M):
         plist.append(x * plist[-1])
     return plist
+
+
 
 def calculate_Tp_matrices(P, M):
     global input_list
