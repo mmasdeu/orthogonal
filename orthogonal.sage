@@ -279,7 +279,11 @@ def degrees(res):
 def RMC(F, M):
     FF = F
     res = [F]
-    for j in range(1,M):
+    d = (-1,-1)
+    j = 0
+    while d != (0,0):
+        j += 1
+    # for j in range(1,M):
         print(f'Iteration {j}')
         t = walltime()
         FF0, (t1, t2, t3) = Next(FF,timing=True)
@@ -453,9 +457,92 @@ def list_powers(x, M):
         plist.append(x * plist[-1])
     return plist
 
+def change_sign_in_matrices(ms):
+    return [(m, -s) for m, s in ms]
 
+def random_candidate_matrices(r, limit=-1):
+    found_matrices = 0
+    yield matrix(2,2,1)
+    i = 0
+    while i != limit:
+        i += 1
+        a = ZZ.random_element()
+        co2 = ZZ.random_element()
+        c = 2*co2
+        x,d,b = a.xgcd(c)
+        if not x == 1:
+            continue
+        m = matrix(2,2,[a,-b,c,d])
+        yield m
+        assert m.det() == 1
+        m2 = matrix(2,2,[r*a, -b, c, -r*d])
+        assert m2.det() == 1
+        yield m2
+    raise StopIteration
 
 def calculate_Tp_matrices(P, M):
+    global input_list
+    r = P.parent().gens()[0]
+    Tplist = [matrix(2,2,[P, a, 0, 1]) for a in range(P.norm()) ] + [matrix(2,2,[1,0,0,P])]
+    MS = []
+    r = P.parent().gen()
+    i = -1
+    for m0 in Tplist:
+        i += 1
+        found = False
+        for c in random_candidate_matrices(r, limit=10**5):
+            try:
+                m = m0 * c
+                # print('c = ',c.list())
+                mlist0 = matrices_for_unimodular_path(-m[0,1], m[0,0])
+                mlist = sum((good_matrices(o) for o in mlist0),[])
+                if m[1,0] != 0:
+                    mlist1 = matrices_for_unimodular_path(-m[1,1], m[1,0])
+                    mlist_to_add = sum((change_sign_in_matrices(good_matrices(o)) for o in mlist1),[])
+                    mlist = mlist + mlist_to_add
+                if not all((m * o).apply_map(lambda x : x.trace() - x).apply_morphism(phi).determinant().valuation() == 0 for o,sgn in mlist):
+                    raise RuntimeError('Problem with embedding, try the other one.')
+                MS.extend((m * o, sgn) for o, sgn in mlist)
+                found = True
+                print(f'{c.list() = }')
+                break
+            except RuntimeError:
+                continue
+        if found == False:
+            raise RuntimeError('still cannot find good matrix')
+    apply_single_dict = {}
+    S = Ruv
+    R = S.base_ring()
+    z1 = R.gen()
+    z2 = S.gen()
+    for cnt, (m, sgn) in enumerate(MS):
+        update_progress(float(cnt)/len(MS))
+        m.set_immutable()
+        mconj = m.apply_map(lambda x : x.trace() - x)
+        A = m.apply_morphism(phi)
+        Aconj = mconj.apply_morphism(phi)
+        for i in range(p+1):
+            ii, subst1 = ApplySingle(A, i, z1, M, check=False)
+            jj, subst2 = ApplySingle(Aconj, i, z2, M, check=True)
+            apply_single_dict[m,i,0] = (ii, list_powers(subst1,M))
+            apply_single_dict[m,i,1] = (jj, list_powers(subst2,M))
+
+    input_list = {(i,j) : list() for i in range(p+1) for j in range(p+1)}
+    for m, sgn in MS:
+        for inky0 in range(p+1):
+            outky0, s1 = apply_single_dict[(m, inky0, 0)]
+            if s1 is None:
+                continue
+            for inky1 in range(p+1):
+                inky = (inky0, inky1)
+                outky1, s2 = apply_single_dict[(m, inky1, 1)]
+                if s2 is None:
+                    continue
+                outky = (outky0, outky1)
+                input_list[outky].append((inky, s1, s2, sgn))
+    return
+
+def calculate_Tp_matrices_old(P, M):
     global input_list
     Tplist = [matrix(2,2,[P, a, 0, 1]) for a in range(P.norm()) ] + [matrix(2,2,[1,0,0,P])]
     MS = []
