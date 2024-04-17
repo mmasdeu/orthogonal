@@ -92,7 +92,7 @@ def all_elements_of_norm(F, n):
         units = [F(eps**i) for i in range(eps.multiplicative_order())]
         return [u * beta for beta in F.elements_of_norm(n) for u in units]
 
-def vectors_in_lattice(n):
+def vectors_in_lattice(p, n):
     resp = []
     resm = []
     for mac in range(1,n+1):
@@ -504,7 +504,6 @@ def calculate_Tp_matrices(P, M):
                     raise RuntimeError('Problem with embedding, try the other one.')
                 MS.extend((m * o, sgn) for o, sgn in mlist)
                 found = True
-                print(f'{c.list() = }')
                 break
             except RuntimeError:
                 continue
@@ -786,8 +785,11 @@ def initial_seed(v, p):
     L0 = [[], []]
     V = [[], []]
     for i, vi in enumerate(v, start=1):
-        Li = vectors_in_lattice(i)
-        Vi = vectors_in_lattice(p * i)
+        if vi == 0:
+            continue
+        Li = vectors_in_lattice(p, i)
+        print(len(Li[0]), len(Li[1]))
+        Vi = vectors_in_lattice(p, p * i)
         if vi > 0:
             L0[0].extend(vi * Li[0])
             L0[1].extend(vi * Li[1])
