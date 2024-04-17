@@ -109,15 +109,13 @@ def functional(p, N = 20):
     # We only consider d with are not a norm from Z[i]
     valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
 
-    MM = []
     MFs = ModularForms(4*p).gens()
-    for g0 in MFs:
-        g = list(g0.q_expansion(N+1))
-        l = lcm([QQ(o).denominator() for o in g])
-        MM.append([l * o for o in g])
     A = Matrix([[QQ(g[o]) for o in valid_ds] for g in MFs])
-    l = lcm([QQ(o).denominator() for o in A.list()])
-    A = (l * A).change_ring(ZZ)
+    for i in range(A.nrows()):
+        l = lcm([QQ(o).denominator() for o in A.row(i)])
+        A.rescale_row(i, l)
+    A = A.change_ring(ZZ)
+
     # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
     # the first position of the vector in the kernel corresponds to a_1, and so on
     L = IntegralLattice(ZZ(len(valid_ds))).sublattice(A.right_kernel().basis())
