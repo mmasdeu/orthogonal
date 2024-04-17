@@ -138,7 +138,7 @@ def vectors_in_lattice(p, n):
     return resp, resm
 
 def inv(FF):
-    R = FF.parent()
+    global Rp
     a0inv = ~Rp(FF(0)(0))
     y1 = 0
     y = a0inv
