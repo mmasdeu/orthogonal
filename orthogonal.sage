@@ -7,6 +7,8 @@ from util import *
 
 # Related to Manin Trick
 
+
+
 def quo_rem_in_gaussian_integers(a,b):
     if b == 0:
         raise ZeroDivisionError
@@ -15,6 +17,29 @@ def quo_rem_in_gaussian_integers(a,b):
     r = a - q*b
     assert r.norm() < b.norm()
     return (q, r)
+
+def xgcd_in_gaussian_integers(a, b):
+    v1 = vector([1,0])
+    v2 = vector([0,1])
+    if b == 0:
+        return (a, v1[0], v1[1])
+    if a == 0:
+        return (b, v2[0], v2[1])
+    a0 = a
+    b0 = b
+    q, r = quo_rem_in_gaussian_integers(a0,b0)
+    while True:
+        d = a0 - q*b0
+        if d == 0:
+            assert b0 == v2[0]*a + v2[1]*b
+            return (b0, v2[0], v2[1])
+        v3 = v1 - q* v2
+        v1 = vector([v2[0], v2[1]])
+        v2 = vector([v3[0], v3[1]])
+        a0 = b0
+        b0 = d
+        q, r = quo_rem_in_gaussian_integers(a0,b0)
+    return
 
 # computes the continued fraction of a/c, where a and c belong to Z[i]
 def continued_fraction(a, c):
@@ -463,15 +488,18 @@ def change_sign_in_matrices(ms):
 def random_candidate_matrices(r, limit=-1):
     found_matrices = 0
     yield matrix(2,2,1)
+    FF = r.parent()
     i = 0
     while i != limit:
         i += 1
-        a = ZZ.random_element()
-        co2 = ZZ.random_element()
+        a = FF.random_element()
+        co2 = FF.random_element()
         c = 2*co2
-        x,d,b = a.xgcd(c)
-        if not x == 1:
+        x,d,b = xgcd_in_gaussian_integers(a, c)
+        if not x in [1, -1, r, -r]:
             continue
+        d = d/x
+        b = b/x
         m = matrix(2,2,[a,-b,c,d])
         yield m
         assert m.det() == 1
