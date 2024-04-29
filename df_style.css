@@ -1,0 +1,35 @@
+/* includes alternating gray and white with on-hover color */
+
+.dgltable {
+    width:100%;
+    table-layout: fixed;
+    font-size: 11pt;
+    font: larger monospace;
+    border-collapse: collapse; 
+    border: 1px solid silver;
+
+}
+
+.dgltable td {
+    max-width:30%;
+    padding: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dgltable tr:nth-child(even) {
+    background: #E0E0E0;
+}
+
+.dgltable tr:hover {
+    background: silver;
+    cursor: pointer;
+}
+
+.dgltable td:hover {
+  background-color: gold;
+  overflow: visible;
+  height: auto;
+}
+
+

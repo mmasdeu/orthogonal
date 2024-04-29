@@ -5,10 +5,41 @@ from concurrent import futures
 from sage.misc.timing import cputime
 from util import *
 
+def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=500):
+    r'''
+    If smallRM:
+    - If char == triv: return F
+    - If char == conj: return HCF of Q(sqrt(-D))
+
+    If smallCM:
+    - If char == triv: return HCF of Q(sqrt(-D))
+    - If char == conj: return Q
+    '''
+    if typ not in ['smallRM','smallCM'] or n != 1:
+        raise NotImplementedError
+    if char not in ['triv', 'conj']:
+        raise ValueError('Parameter "char" must be either "triv" or "conj"')
+    x = QQ['x'].gen()
+    if typ == 'smallCM':
+        D = -D
+    L.<a> = QuadraticField(D)
+    if typ == 'smallRM' and char == 'triv':
+        H = F
+        M = L
+    elif typ == 'smallCM' and char == 'conj':
+        H = QQ
+        M = F
+    else:
+        M = (L.composite_fields(F, names='t')[0]).absolute_field(names='t1')
+        H = NumberField(sage_eval(magma_free(f'print DefiningPolynomial(AbsoluteField(HilbertClassField(NumberField(PolynomialRing(Rationals())!{str(M.defining_polynomial().list())}))));'), locals = {'x' : x}), names=names)
+    prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
+    if char == 'triv':
+        prime_list = [p for p in prime_list if len(F.ideal(p).factor()) == 2]
+    else:
+        prime_list = [p for p in prime_list if len(M.ideal(p).factor()) < M.degree()]
+    return H, prime_list
+
 # Related to Manin Trick
-
-
-
 def quo_rem_in_gaussian_integers(a,b):
     if b == 0:
         raise ZeroDivisionError
@@ -185,6 +216,7 @@ def compute_level1_contribution(A, Ap, sgn, Rp):
     return j1, j2, ans, sgn
 
 def Level1(V, M):
+    global ncpus
     res = {(i,j) : [Ruv(1), Ruv(1)] for i in range(p+1) for j in range(p+1)}
     dg = {(i,j) : 0 for i in range(p+1) for j in range(p+1)}
     input_vec = []
@@ -199,7 +231,7 @@ def Level1(V, M):
         else:
             res[i,j][1] *= FF
         dg[i,j] += sgn
-    with futures.ProcessPoolExecutor() as executor:
+    with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
         # Calculate inverses
         print('Calculating inverses...')
         future = {executor.submit(inv, val[1]) : ky for ky, val in res.items()}
@@ -268,14 +300,14 @@ def Transform(outky):
     return ans, (t1,t2,t3)
 
 def Next(F, timing=False):
-    global gF
+    global gF, ncpus
     gF = F
     res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
     t1 = 0
     t2 = 0
     t3 = 0
     if parallelize:
-        with futures.ProcessPoolExecutor() as executor:
+        with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
             # Iteration
             future_dict = {executor.submit(Transform, outky) : outky for outky, inps in input_list.items()}
             for fut in futures.as_completed(future_dict):
@@ -302,6 +334,7 @@ def degrees(res):
     return dumax, dvmax
 
 def RMC(F, M):
+    global ncpus
     FF = F
     res = [F]
     d = (-1,-1)
@@ -322,7 +355,7 @@ def RMC(F, M):
     print(f'Now computing product...')
     t = walltime()
     if parallelize:
-        with futures.ProcessPoolExecutor() as executor:
+        with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
             while len(res) > 1:
                 future_dict = {executor.submit(mul_dict, res[i], res[i+1]) : i for i in range(0,len(res)-1, 2) }
                 res = [] if len(res) % 2 == 0 else [res[-1]]
@@ -444,7 +477,11 @@ def bigRMcycle(D, n=1):
     return A, [tau0, tau1], E.class_number()
 
 def RMCEval(D, cycle_type, prec, n=1, return_class_number=False):
-    global L0, J
+    global L0, J, ncpus
+    try:
+        ncpus = ncpus
+    except NameError:
+        ncpus = cpu_count()
     if cycle_type == 'smallCM':
         A, tau0, hE = smallCMcycle(D)
     elif cycle_type == 'smallRM':
@@ -461,7 +498,7 @@ def RMCEval(D, cycle_type, prec, n=1, return_class_number=False):
     res0 = prod(Eval0(L0, act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
     if parallelize:
         res1 = 1
-        with futures.ProcessPoolExecutor() as executor:
+        with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
             future_dict = {executor.submit(Eval, act_matrix(m.apply_morphism(phi).adjugate(), tau0), prec) : sgn for m, sgn in mlist}
             for fut in futures.as_completed(future_dict):
                 res1 *= fut.result()**(future_dict[fut])

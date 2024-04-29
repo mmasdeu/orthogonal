@@ -1,5 +1,7 @@
 from util import *
 from fire import Fire
+import stopit
+
 from sage.all import QuadraticField, load, Integer, RealNumber, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq, srange, ModularForms, IntegralLattice
 # Calculate DGL periods
 
@@ -72,6 +74,47 @@ def cocycle(q : int, label : str, M : int, fname=None):
     print(f'Saving to {fname}...')
     save((L0, J), fname)
     print(f'Finished in {walltime(t)} seconds')
+
+def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, timeout=20, outfile=None, logfile=None, max_degree=16):
+    global L0, J, p, F, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
+    p = q
+    if fname is None:
+        if not isinstance(label, str):
+            label = label_from_functional(label)
+        fname = f'L0Jtuple_{p}_{label}_{M}.sobj'
+    if isinstance(D,tuple):
+        D, n = D
+    else:
+        n = 1
+    w = F.elements_of_norm(p)[0]
+    Fp = Qp(p,2*M, type='floating-point')
+    Rp = Zmod(p**M)
+    phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
+    if phi(w).valuation() == 0:
+        phi = F.hom([F.gen().minpoly().roots(Fp)[1][0]],check=False)
+    Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
+    inv_map_poly = Ruv.flattening_morphism()
+    map_poly = inv_map_poly.inverse()
+    load('orthogonal.sage')
+    L0, J = load(fname)
+    Jtau, hE = RMCEval(D, cycle_type, M, n, return_class_number=True)
+    success = False
+    for deg in [2**i for i in range(1, 10) if 2**i <= max_degree]:
+        with stopit.ThreadingTimeout(timeout) as to_ctx_mgr:
+            ans = recognize_DGL_algdep(Jtau, deg, outfile=None)
+        if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
+            fwrite('Someone got impatient...', logfile)
+            ans = (None, None, None)
+            break
+        if ans[0] is not None:
+            success = True
+            fwrite(f'Computed Jtau for {D = } {n = } {hE = }...', outfile)
+            fwrite('SUCCESS: ' + str(ans[0].add_bigoh(10)) + str(ans[1:]), outfile)
+            break
+    if not success:
+        fwrite(f'Computed Jtau for {D = } {n = } {hE = }... (not recognized)', outfile)
+    if __name__ != '__main__':
+        return Jtau, ans
 
 def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
     global L0, J, p, F, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
@@ -188,5 +231,5 @@ def check_cocycle(L0, J, M, version=2):
     return res
 
 if __name__ == '__main__':
-  Fire({'cocycle': cocycle,'evaluate': evaluate,'functional':functional})
+  Fire({'cocycle': cocycle,'evaluate': evaluate,'functional':functional, 'recognize':recognize})
 
