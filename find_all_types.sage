@@ -1,6 +1,7 @@
 from glob import glob
 from time import sleep
 from fire import Fire
+from xml.parsers.expat import ExpatError
 import stopit
 
 from sage.rings.padics.precision_error import PrecisionError
@@ -27,7 +28,7 @@ F.<i> = QuadraticField(-1)
 ncpus = 4
 parallelize = True
 
-def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000):
+def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, logfile='outfiles/output.log'):
     global L0, J, M, F, p, Rp, phi
     if typ is None or typ == 'all':
         cycle_types = ['smallCM', 'smallRM', 'bigRM']
@@ -36,7 +37,6 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000):
     else:
         cycle_types = [typ]
     F = QuadraticField(-1, names='r')
-    logfile='outfiles/output.log'
 
     Dvalues = [D for D in srange(ZZ(Dmin),ZZ(Dmax)) if D.is_fundamental_discriminant()]
     nvalues = [1]
@@ -76,6 +76,12 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000):
                         continue
                     for Jtau, char in [(Cp(Jtau0.norm()), 'triv'), (Cp(Jtau0**2 / Jtau0.norm()), 'conj')]:
                         success = False
+                        try:
+                            H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z')
+                        except ExpatError:
+                            fwrite(f'Computed Jtau for {D = } {n = } {hE = }... ({char} not recognized since H could not be computed)', outfile)
+                            H = None
+                            prime_list = None
                         for deg in [2,4,8]:
                             with stopit.ThreadingTimeout(20) as to_ctx_mgr:
                                 ans = recognize_DGL_algdep(Jtau, deg, outfile=None, roots_of_unity=[1])
@@ -86,10 +92,16 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000):
                             if ans[0] is not None:
                                 success = True
                                 fwrite(f'Computed Jtau for {D = } {n = } {hE = }...', outfile)
-                                fwrite(f'SUCCESS {char} with algdep: ' + str(ans[0].unit_part().add_bigoh(10)) + str(ans[1:]), outfile)
+                                support = [q for q, _ in ans[-1] if q in ZZ]
+                                msg = f'SUCCESS {char} with algdep: ' + str(ans[0].unit_part().add_bigoh(10)) + str(ans[1:])
+                                if prime_list is None:
+                                    msg += 'warning: primes not checked!'
+                                else:
+                                    if any(q not in prime_list for q in support):
+                                        msg += 'warning: ' + str([q for q in support if q not in prime_list])
+                                fwrite(msg, outfile)
                                 break
-                        if not success and cycle_type in ['smallRM', 'smallCM']:
-                            H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z')
+                        if not success and cycle_type in ['smallRM', 'smallCM'] and prime_list is not None:
                             with stopit.ThreadingTimeout(1800) as to_ctx_mgr:
                                 ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True)
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:

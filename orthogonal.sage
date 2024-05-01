@@ -23,20 +23,20 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
     if typ == 'smallCM':
         D = -D
     L.<a> = QuadraticField(D)
+    M = (L.composite_fields(F, names='t')[0]).absolute_field(names='t1')
     if typ == 'smallRM' and char == 'triv':
+        # M = L
         H = F
-        M = L
     elif typ == 'smallCM' and char == 'conj':
+        # M = F
         H = QQ
-        M = F
     else:
-        M = (L.composite_fields(F, names='t')[0]).absolute_field(names='t1')
         H = NumberField(sage_eval(magma_free(f'print DefiningPolynomial(AbsoluteField(HilbertClassField(NumberField(PolynomialRing(Rationals())!{str(M.defining_polynomial().list())}))));'), locals = {'x' : x}), names=names)
-    prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
-    if char == 'triv':
-        prime_list = [p for p in prime_list if len(F.ideal(p).factor()) == 2]
-    else:
-        prime_list = [p for p in prime_list if len(M.ideal(p).factor()) < M.degree()]
+    # prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
+    # if char == 'triv':
+    #     prime_list = [p for p in prime_list if len(F.ideal(p).factor()) == 2]
+    # else:
+    prime_list = [p for p in prime_range(prime_bound) if len(M.ideal(p).factor()) < M.degree()]
     return H, prime_list
 
 # Related to Manin Trick
