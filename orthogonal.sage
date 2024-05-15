@@ -3,6 +3,7 @@ from sage.rings.padics.precision_error import PrecisionError
 from multiprocessing import Process, Manager, Pool, cpu_count
 from concurrent import futures
 from sage.misc.timing import cputime
+from sage.libs.pari import pari
 from util import *
 
 def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=500):
@@ -31,12 +32,19 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
         # M = F
         H = QQ
     else:
-        H = NumberField(sage_eval(magma_free(f'print DefiningPolynomial(AbsoluteField(HilbertClassField(NumberField(PolynomialRing(Rationals())!{str(M.defining_polynomial().list())}))));'), locals = {'x' : x}), names=names)
-    # prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
+        # magma_ans = magma.eval(f'R<x>:=PolynomialRing(Rationals());  print R!DefiningPolynomial(AbsoluteField(HilbertClassField(NumberField(R!{str(M.defining_polynomial().list())}))));')
+        # ff = sage_eval(magma_ans, locals = {'x' : x})
+        # try:
+        #     ff = sage_eval(str(pari('polredabs(%s)'%ff)), locals={'x': QQ['x'].gen()})
+        # except PariError:
+        #     pass
+        # H = NumberField(ff, names=names)
+        H = (L.hilbert_class_field(names='tt').composite_fields(F)[0]).absolute_field(names=names)
+    prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
     # if char == 'triv':
     #     prime_list = [p for p in prime_list if len(F.ideal(p).factor()) == 2]
     # else:
-    prime_list = [p for p in prime_range(prime_bound) if len(M.ideal(p).factor()) < M.degree()]
+    prime_list = [p for p in prime_list if len(M.ideal(p).factor()) < M.degree()]
     return H, prime_list
 
 # Related to Manin Trick
@@ -217,6 +225,10 @@ def compute_level1_contribution(A, Ap, sgn, Rp):
 
 def Level1(V, M):
     global ncpus
+    try:
+        ncpus = ncpus
+    except NameError:
+        ncpus = cpu_count()
     res = {(i,j) : [Ruv(1), Ruv(1)] for i in range(p+1) for j in range(p+1)}
     dg = {(i,j) : 0 for i in range(p+1) for j in range(p+1)}
     input_vec = []
@@ -301,6 +313,10 @@ def Transform(outky):
 
 def Next(F, timing=False):
     global gF, ncpus
+    try:
+        ncpus = ncpus
+    except NameError:
+        ncpus = cpu_count()
     gF = F
     res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
     t1 = 0
@@ -335,6 +351,10 @@ def degrees(res):
 
 def RMC(F, M):
     global ncpus
+    try:
+        ncpus = ncpus
+    except NameError:
+        ncpus = cpu_count()
     FF = F
     res = [F]
     d = (-1,-1)

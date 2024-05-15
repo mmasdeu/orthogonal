@@ -54,7 +54,7 @@ def get_Dn(ln):
 
 def get_poly_and_field(ln):
     x = ZZ['x'].gen()
-    data_list = re.search('.*O\(.*\^10\)\(([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), (.*)\)', ln).groups()
+    data_list = re.search('.*O\(.*\^10\)\(([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), (.*), (.*)\)(.*)', ln).groups()
     vals = []
     for o in data_list:
         try:
@@ -62,18 +62,14 @@ def get_poly_and_field(ln):
         except (NameError, SyntaxError):
             newval = copy(o)
         vals.append(newval)
-    poly, field, nrm, i, denom, pw = vals
+    poly, field, nrm, i, denom, pw, hpoly, msg = vals
     if type(pw) == list:
-        try:
-            pw = print_factorization(pw)
-        except:
-            pw = [(a, b) for b, a in pw] # DEBUG: for backward compatibility
-            pw = print_factorization(pw)
+        pw = print_factorization(pw)
     if 'algdep' in ln:
-        pw += ' (a)'
-    else:
-        pw += ' (l)'
-    return poly, field, pw
+        pw += ' (a)' + msg
+    else: # lindep
+        pw += ' (l)' + msg
+    return poly, field, pw, hpoly
 
 def get_header(fname):
     fsp = (fname.split('/')[-1]).strip('.txt').split('_')[1:]
@@ -91,31 +87,40 @@ def make_table(fname):
     # print(f'Processing {fname}...')
     tp, p, label, prec = get_file_data(fname)
     val = {'p': p, 'label': label, 'type': tp}
+    J = '?'
     with open(fname, 'r') as f:
         ds = []
         for ln in f:
             if ln[:3] == '...':
                 continue
+            if 'Jtriv' in ln and 'Jconj' in ln:
+                Jtriv, Jconj = tuple(QQ(o) for o in re.search('Jtriv = (.[0-9/]*), Jconj = (.[0-9/]*)', ln).groups())
             if 'Computed' in ln:
                 Dn, nn = get_Dn(ln)
                 val['D'] = Dn
                 if 'Jtau = 1' in ln:
                     v1 = copy(val)
-                    v1.update({'field' : 'x', 'factor' : 'J = (1)', 'poly' : 'x-1'})
+                    v1.update({'field' : 'x', 'factor' : 'J = (1)', 'poly' : 'x - 1', 'hpoly' : '-', 'J' : '1', 'trivial' : True, 'recognized' : True})
                     v2 = copy(v1)
                     v1['char'] = 'triv'
                     v2['char'] = 'conj'
                     ds.extend([v1,v2])
-                elif 'not recognized' in ln:
+                else:
+                    try:
+                        J = QQ(re.search('J.... = (.[0-9/]*)', ln).groups()[0])
+                    except AttributeError:
+                        J = '?'
+                if 'not recognized' in ln:
                     v1 = copy(val)
-                    v1.update({'char' : 'triv' if 'triv' in ln else 'conj', 'field' : '?', 'factor' : '?', 'poly' : '?'})
+                    J, char = (Jtriv, 'triv') if 'triv' in ln else (Jconj, 'conj')
+                    v1.update({'char' : char, 'field' : '?', 'factor' : '?', 'poly' : '?', 'hpoly' : '?', 'J' : J, 'trivial' : False, 'recognized' : False})
                     ds.append(v1)
-                continue
             elif 'SUCCESS' in ln:
-                poly, field, pw = get_poly_and_field(ln)
-                char = 'triv' if 'triv' in ln else 'conj'
+                poly, field, factor, hpoly = get_poly_and_field(ln)
+                J, char = (Jtriv, 'triv') if 'triv' in ln else (Jconj, 'conj')
                 v1 = copy(val)
-                v1.update({'char' : char, 'field' : field, 'factor' : pw, 'poly' : poly})
+                trivial = True if J == 1 else False
+                v1.update({'char' : char, 'field' : field, 'factor' : factor, 'poly' : poly, 'hpoly' : hpoly, 'J' : J, 'trivial' : trivial, 'recognized' : True})
                 ds.append(v1)
         return ds
 
@@ -135,34 +140,45 @@ def main(path='outfiles/'):
             doc.asis('''
   <link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css'>
 <link rel='stylesheet' href='https://cdn.datatables.net/1.10.12/css/dataTables.bootstrap.min.css'>
-<link rel='stylesheet' href='https://cdn.datatables.net/buttons/1.2.2/css/buttons.bootstrap.min.css'>''')
+<link rel='stylesheet' href='https://cdn.datatables.net/buttons/1.2.2/css/buttons.bootstrap.min.css'>
+<link rel='stylesheet' href='https://cdn.datatables.net/searchbuilder/1.7.1/css/searchBuilder.dataTables.css'>
+            ''')
+
         doc.asis('<link rel="stylesheet" type="text/css" href="df_style.css"/>')
         with tag('body'):
-            dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            line('p', f'Last update: {dt}')
             tbl = []
             for f in flist:
                 hdr = get_header(f)
                 typ = next(typ for typ in type_list if typ in hdr)
                 tbl.extend(make_table(f))
-            df = pd.DataFrame(tbl, dtype=pd.StringDtype())# .transpose()
-            columns = ['p', 'label', 'D', 'type', 'char', 'field', 'factor', 'poly']
+            tbl = sorted(tbl, key = lambda v : ZZ(v['D']))
+            df = pd.DataFrame(tbl, dtype=pd.StringDtype())
+
+            line('p', f'Last update: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+            line('h1', 'Summary')
+            with tag('ul'):
+                tot_trivial = len([o for o in tbl if o["factor"] == "J = (1)"])
+                tot_unr = len([o for o in tbl if o["factor"] == "?"])
+                tot_rows = len(tbl)
+                tot_recog = tot_rows - tot_trivial - tot_unr
+                line('li', f'Total trivial: {tot_trivial}')
+                line('li', f'Total unrecognized: {tot_unr}')
+                line('li', f'Total recognized (nontrivial): {tot_recog}')
+                line('li', f'Total rows: {tot_rows}')
+
+
+            columns = ['p', 'label', 'D', 'type', 'char', 'trivial', 'recognized', 'field', 'factor', 'poly', 'hpoly', 'J']
             doc.asis(df.to_html(classes=['table', 'table-striped', 'table-bordered' ], table_id='dgltable', sparsify=False, escape=False, index=False, columns=columns)[:-8]\
 +"<tfoot>\n" + " ".join(["<th>"+ i +"</th>\n" for i in columns])+"</tr>\n  </tfoot></table>")
 
             doc.asis('''
-<!-- partial -->
-  <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.0/jquery.min.js'></script>
-<script src='https://cdn.datatables.net/1.10.12/js/jquery.dataTables.min.js'></script>
-<script src='https://cdn.datatables.net/buttons/1.2.2/js/dataTables.buttons.min.js'></script>
-<script src='https://cdn.datatables.net/buttons/1.2.2/js/buttons.colVis.min.js'></script>
-<script src='https://cdn.datatables.net/buttons/1.2.2/js/buttons.html5.min.js'></script>
-<script src='https://cdn.datatables.net/buttons/1.2.2/js/buttons.print.min.js'></script>
-<script src='https://cdn.datatables.net/1.10.12/js/dataTables.bootstrap.min.js'></script>
-<script src='https://cdn.datatables.net/buttons/1.2.2/js/buttons.bootstrap.min.js'></script>
-<script src='https://cdnjs.cloudflare.com/ajax/libs/jszip/2.5.0/jszip.min.js'></script>
-<script src='https://cdn.rawgit.com/bpampuch/pdfmake/0.1.18/build/vfs_fonts.js'></script>
-<script src='https://cdn.rawgit.com/bpampuch/pdfmake/0.1.18/build/pdfmake.min.js'></script><script  src="./script.js"></script>
+            <!-- partial -->
+<link href="https://cdn.datatables.net/v/dt/jq-3.7.0/jszip-3.10.1/dt-2.0.6/b-3.0.2/b-colvis-3.0.2/b-html5-3.0.2/b-print-3.0.2/r-3.0.2/sb-1.7.1/datatables.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/v/dt/jq-3.7.0/jszip-3.10.1/dt-2.0.6/b-3.0.2/b-colvis-3.0.2/b-html5-3.0.2/b-print-3.0.2/r-3.0.2/sb-1.7.1/datatables.min.js"></script>
+            <script src='https://cdn.datatables.net/plug-ins/2.0.5/dataRender/ellipsis.js'></script>
+            <script  src="./script.js"></script>
             ''')
     print(indent(doc.getvalue()))
 

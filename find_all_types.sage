@@ -28,8 +28,9 @@ F.<i> = QuadraticField(-1)
 ncpus = 4
 parallelize = True
 
-def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, logfile='outfiles/output.log'):
+def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log'):
     global L0, J, M, F, p, Rp, phi
+    logfile = outdir + '/' + log
     if typ is None or typ == 'all':
         cycle_types = ['smallCM', 'smallRM', 'bigRM']
     elif typ == 'small':
@@ -58,7 +59,7 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, logfile='outfiles/out
     label = get_label(fname)
     for D in Dvalues:
         for cycle_type in cycle_types:
-            outfile = f'outfiles/points_{cycle_type}_{p}_{label}_{M}.txt'
+            outfile = outdir + '/' + f'points_{cycle_type}_{p}_{label}_{M}.txt'
             if cycle_type == 'bigRM':
                 nvalues = [-7, -6, -5, -3, -3, -1, 1, 2, 3, 5, 6, 7]
             else:
@@ -74,16 +75,22 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, logfile='outfiles/out
                     if Jtau0 == 1:
                         fwrite(f'Computed Jtau = 1 for {D = } {n = } {hE = }...', outfile)
                         continue
+                    # Jtriv = Jtau0.norm().lift()
+                    # Jconj = ((Jtau0**2 / Jtau0.norm()).trace() / 2).lift()
+                    # fwrite(f'{Jtriv = }, {Jconj = }', outfile)
                     for Jtau, char in [(Cp(Jtau0.norm()), 'triv'), (Cp(Jtau0**2 / Jtau0.norm()), 'conj')]:
                         success = False
                         try:
-                            H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z')
+                            with stopit.ThreadingTimeout(120) as to_ctx_mgr:
+                                H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z')
+                            if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
+                                raise ExpatError
                         except ExpatError:
-                            fwrite(f'Computed Jtau for {D = } {n = } {hE = }... ({char} not recognized since H could not be computed)', outfile)
+                            fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }... ({char} not recognized since H could not be computed)', outfile)
                             H = None
                             prime_list = None
                         for deg in [2,4,8]:
-                            with stopit.ThreadingTimeout(20) as to_ctx_mgr:
+                            with stopit.ThreadingTimeout(30) as to_ctx_mgr:
                                 ans = recognize_DGL_algdep(Jtau, deg, outfile=None, roots_of_unity=[1])
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
                                 fwrite('Someone got impatient...', logfile)
@@ -91,30 +98,32 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, logfile='outfiles/out
                                 break
                             if ans[0] is not None:
                                 success = True
-                                fwrite(f'Computed Jtau for {D = } {n = } {hE = }...', outfile)
+                                fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }...', outfile)
                                 support = [q for q, _ in ans[-1] if q in ZZ]
-                                msg = f'SUCCESS {char} with algdep: ' + str(ans[0].unit_part().add_bigoh(10)) + str(ans[1:])
+                                dta = list(ans[1:])
+                                dta.append('?' if H is None else H.defining_polynomial())
+                                msg = f'SUCCESS {char} with algdep: ' + str(ans[0].unit_part().add_bigoh(10)) + str(tuple(dta))
                                 if prime_list is None:
-                                    msg += 'warning: primes not checked!'
+                                    msg += ' warning: primes not checked!'
                                 else:
                                     if any(q not in prime_list for q in support):
-                                        msg += 'warning: ' + str([q for q in support if q not in prime_list])
+                                        msg += ' warning: ' + str([q for q in support if q not in prime_list])
                                 fwrite(msg, outfile)
                                 break
                         if not success and cycle_type in ['smallRM', 'smallCM'] and prime_list is not None:
-                            with stopit.ThreadingTimeout(1800) as to_ctx_mgr:
-                                ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True)
+                            with stopit.ThreadingTimeout(3600) as to_ctx_mgr:
+                                ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, degree_bound=8, algorithm='pari')
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
                                 fwrite(f'Someone got impatient...  {cycle_type = } {p = } {label = } {D = }, {n = }', logfile)
                                 ans = None
                             if ans is not None:
                                 success = True
-                                fwrite(f'Computed Jtau for {D = } {n = } {hE = }...', outfile)
                                 ffpoly, rec, clist_ans, field = ans
-                                fwrite(f'SUCCESS {char} with lindep: ' + str(Jtau.unit_part().add_bigoh(10)) + f'({ffpoly}, {field}, {rec}, 0, 1, {clist_ans})', outfile)
+                                fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }...', outfile)
+                                fwrite(f'SUCCESS {char} with lindep: ' + str(Jtau.unit_part().add_bigoh(10)) + f'({ffpoly}, {field}, {rec}, 0, 1, {clist_ans}, {H.defining_polynomial()})', outfile)
 
                         if not success:
-                            fwrite(f'Computed Jtau for {D = } {n = } {hE = }... ({char} not recognized)', outfile)
+                            fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }... ({char} not recognized)', outfile)
                     fwrite('...', outfile)
                 except KeyboardInterrupt:
                     fwrite(f'WARNING! Keyboard interrupt so skipping {cycle_type = } {p = } {label = } {D = }, {n = }', logfile)

@@ -1,11 +1,16 @@
 /* includes alternating gray and white with on-hover color */
 
+body {
+	margin: 2em;
+}
+
+
 .dgltable {
     width:100%;
     table-layout: fixed;
     font-size: 11pt;
     font: larger monospace;
-    border-collapse: collapse; 
+    border-collapse: collapse;
     border: 1px solid silver;
 
 }
@@ -32,4 +37,6 @@
   height: auto;
 }
 
+.dt-button-collection {
+overflow-y: scroll;
 
