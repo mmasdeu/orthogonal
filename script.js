@@ -17,6 +17,7 @@ $(document).ready(function () {
 	dom: 'lBfrtip',
 	paging: false,
 	ordering: false,
+	fixedHeader: true,
 	autoWidth: true,
 	columnDefs: [ {
 	    targets: [9, 10, 11],

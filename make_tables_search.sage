@@ -107,19 +107,19 @@ def make_table(fname):
                     ds.extend([v1,v2])
                 else:
                     try:
-                        J = QQ(re.search('J.... = (.[0-9/]*)', ln).groups()[0])
+                        J = QQ(re.search('J[a-z]* = (.[0-9/]*)', ln).groups()[0])
                     except AttributeError:
                         J = '?'
                 if 'not recognized' in ln:
                     v1 = copy(val)
-                    J, char = (Jtriv, 'triv') if 'triv' in ln else (Jconj, 'conj')
+                    J, char = (J, 'triv') if 'triv' in ln else (J, 'conj')
                     v1.update({'char' : char, 'field' : '?', 'factor' : '?', 'poly' : '?', 'hpoly' : '?', 'J' : J, 'trivial' : False, 'recognized' : False})
                     ds.append(v1)
             elif 'SUCCESS' in ln:
                 poly, field, factor, hpoly = get_poly_and_field(ln)
-                J, char = (Jtriv, 'triv') if 'triv' in ln else (Jconj, 'conj')
+                J, char = (J, 'triv') if 'triv' in ln else (J, 'conj')
                 v1 = copy(val)
-                trivial = True if J == 1 else False
+                trivial = True if str(poly) == "x - 1" else False
                 v1.update({'char' : char, 'field' : field, 'factor' : factor, 'poly' : poly, 'hpoly' : hpoly, 'J' : J, 'trivial' : trivial, 'recognized' : True})
                 ds.append(v1)
         return ds
@@ -139,9 +139,12 @@ def main(path='outfiles/'):
                 doc.asis('Tables for DGL points')
             doc.asis('''
   <link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css'>
+<link href="https://cdn.datatables.net/v/dt/jq-3.7.0/jszip-3.10.1/dt-2.0.6/b-3.0.2/b-colvis-3.0.2/b-html5-3.0.2/b-print-3.0.2/r-3.0.2/sb-1.7.1/datatables.min.css" rel="stylesheet">
 <link rel='stylesheet' href='https://cdn.datatables.net/1.10.12/css/dataTables.bootstrap.min.css'>
 <link rel='stylesheet' href='https://cdn.datatables.net/buttons/1.2.2/css/buttons.bootstrap.min.css'>
 <link rel='stylesheet' href='https://cdn.datatables.net/searchbuilder/1.7.1/css/searchBuilder.dataTables.css'>
+<link rel='stylesheet' href='https://cdn.datatables.net/v/dt/dt-2.0.7/fh-4.0.1/datatables.min.css'>
+<link rel='stylesheet' href='https://cdn.datatables.net/v/dt/dt-2.0.7/fh-4.0.1/datatables.min.css'>
             ''')
 
         doc.asis('<link rel="stylesheet" type="text/css" href="df_style.css"/>')
@@ -154,14 +157,26 @@ def main(path='outfiles/'):
             tbl = sorted(tbl, key = lambda v : ZZ(v['D']))
             df = pd.DataFrame(tbl, dtype=pd.StringDtype())
 
+
+            line('h1', 'Tables of DGL points')
             line('p', f'Last update: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
-            line('h1', 'Summary')
+            line('h2', 'Experimental observations')
+            with tag('ul'):
+                line('li', 'smallCM + conj is always 1: smallCM points are always defined over Qp')
+                line('li', 'smallCM + triv is 1 when D = 1 (mod 8)')
+                line('li', 'smallRM + triv is 1 when D = 0 (mod 4)')
+                line('li', 'smallRM + triv is very often defined over Q(i), but we have some exceptions!')
+            line('h2', 'Recovering data')
+            with tag('ul'):
+                line('li', 'For "triv": Cp.<t> = Qq(p**2, prec); J = Cp(2*J0)')
+                line('li', 'For "conj": Cp.<t> = Qq(p**2, prec); a = Cp(J0); t0 = t - t.trace()/2; b = ((1-a**2)/t0.norm()).sqrt(); J = a + b * t0')
+            line('h2', 'Summary')
             with tag('ul'):
                 tot_trivial = len([o for o in tbl if o["factor"] == "J = (1)"])
                 tot_unr = len([o for o in tbl if o["factor"] == "?"])
                 tot_rows = len(tbl)
-                tot_recog = tot_rows - tot_trivial - tot_unr
-                line('li', f'Total trivial: {tot_trivial}')
+                tot_recog = len([o for o in tbl if not o['trivial'] and o['recognized']])
+                line('li', f'Total completely trivial: {tot_trivial} (simultaneously for both characters)')
                 line('li', f'Total unrecognized: {tot_unr}')
                 line('li', f'Total recognized (nontrivial): {tot_recog}')
                 line('li', f'Total rows: {tot_rows}')
@@ -173,11 +188,11 @@ def main(path='outfiles/'):
 
             doc.asis('''
             <!-- partial -->
-<link href="https://cdn.datatables.net/v/dt/jq-3.7.0/jszip-3.10.1/dt-2.0.6/b-3.0.2/b-colvis-3.0.2/b-html5-3.0.2/b-print-3.0.2/r-3.0.2/sb-1.7.1/datatables.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 <script src="https://cdn.datatables.net/v/dt/jq-3.7.0/jszip-3.10.1/dt-2.0.6/b-3.0.2/b-colvis-3.0.2/b-html5-3.0.2/b-print-3.0.2/r-3.0.2/sb-1.7.1/datatables.min.js"></script>
-            <script src='https://cdn.datatables.net/plug-ins/2.0.5/dataRender/ellipsis.js'></script>
+<script src='https://cdn.datatables.net/plug-ins/2.0.5/dataRender/ellipsis.js'></script>
+<script src='https://cdn.datatables.net/fixedheader/4.0.1/js/dataTables.fixedHeader.min.js'></script>
             <script  src="./script.js"></script>
             ''')
     print(indent(doc.getvalue()))

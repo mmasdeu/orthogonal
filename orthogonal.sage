@@ -17,7 +17,7 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
     - If char == conj: return Q
     '''
     if typ not in ['smallRM','smallCM'] or n != 1:
-        raise NotImplementedError
+        return None, None
     if char not in ['triv', 'conj']:
         raise ValueError('Parameter "char" must be either "triv" or "conj"')
     x = QQ['x'].gen()
@@ -25,25 +25,11 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
         D = -D
     L.<a> = QuadraticField(D)
     M = (L.composite_fields(F, names='t')[0]).absolute_field(names='t1')
-    if typ == 'smallRM' and char == 'triv':
-        # M = L
-        H = F
-    elif typ == 'smallCM' and char == 'conj':
-        # M = F
+    if typ == 'smallCM' and char == 'conj':
         H = QQ
     else:
-        # magma_ans = magma.eval(f'R<x>:=PolynomialRing(Rationals());  print R!DefiningPolynomial(AbsoluteField(HilbertClassField(NumberField(R!{str(M.defining_polynomial().list())}))));')
-        # ff = sage_eval(magma_ans, locals = {'x' : x})
-        # try:
-        #     ff = sage_eval(str(pari('polredabs(%s)'%ff)), locals={'x': QQ['x'].gen()})
-        # except PariError:
-        #     pass
-        # H = NumberField(ff, names=names)
         H = (L.hilbert_class_field(names='tt').composite_fields(F)[0]).absolute_field(names=names)
     prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
-    # if char == 'triv':
-    #     prime_list = [p for p in prime_list if len(F.ideal(p).factor()) == 2]
-    # else:
     prime_list = [p for p in prime_list if len(M.ideal(p).factor()) < M.degree()]
     return H, prime_list
 

@@ -8,6 +8,10 @@ from sage.rings.padics.precision_error import PrecisionError
 from cysignals.signals import SignalError
 from builtins import ModuleNotFoundError
 
+F.<i> = QuadraticField(-1)
+ncpus = 4
+parallelize = True
+
 load('orthogonal.sage')
 # cocycle_fnames = sorted(glob('L0Jtuple*.sobj'))
 
@@ -21,12 +25,9 @@ def get_label(f):
     fsp = f.split('_')
     return fsp[2] + '_' + fsp[3]
 
-# Ths command can run all of it
+# This command can run all of it
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
 
-F.<i> = QuadraticField(-1)
-ncpus = 4
-parallelize = True
 
 def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log'):
     global L0, J, M, F, p, Rp, phi
@@ -75,10 +76,7 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
                     if Jtau0 == 1:
                         fwrite(f'Computed Jtau = 1 for {D = } {n = } {hE = }...', outfile)
                         continue
-                    # Jtriv = Jtau0.norm().lift()
-                    # Jconj = ((Jtau0**2 / Jtau0.norm()).trace() / 2).lift()
-                    # fwrite(f'{Jtriv = }, {Jconj = }', outfile)
-                    for Jtau, char in [(Cp(Jtau0.norm()), 'triv'), (Cp(Jtau0**2 / Jtau0.norm()), 'conj')]:
+                    for Jtau, char in [(Jtau0.norm(), 'triv'), (Jtau0**2 / Jtau0.norm(), 'conj')]:
                         success = False
                         try:
                             with stopit.ThreadingTimeout(120) as to_ctx_mgr:
