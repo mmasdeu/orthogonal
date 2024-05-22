@@ -702,8 +702,6 @@ def recognize_DGL_lindep(J, L, prime_list, Cp = None, units=None, outfile=None, 
         V = [None]
         Vlogs = [K_to_Cp(J.log(0))]
         W = ['J']
-        lp = 0
-        hLlist = [1]
         hL = 1
         glist = []
         for ell in prime_list:
@@ -754,11 +752,11 @@ def recognize_DGL_lindep(J, L, prime_list, Cp = None, units=None, outfile=None, 
         if kwargs.get('debug_Vlogs', None) is not None:
             return Vlogs
         clist = our_lindep(Vlogs, **kwargs)
+        if clist[0] < 0:
+            clist = [-o for o in clist]
         verbose(f'clist = {clist}')
         verbose(f'W = {W}')
         verbose(f'Should be zero : {sum([c * o for c, o in zip(clist, Vlogs)])}')
-        if clist[0] < 0:
-            clist = [-o for o in clist]
         if clist[0] == 0:
             verbose(f'Not recognized: clist[0] = {clist[0]}')
             return None
@@ -778,14 +776,11 @@ def recognize_DGL_lindep(J, L, prime_list, Cp = None, units=None, outfile=None, 
             if not clist[0] > 0:
                 verbose(f'Redundant set of primes?')
                 return None
-            fact = Factorization([(u,-a) for u, a in zip(V[1:],clist[1:])])
             assert len(V) == len(clist)
-            # assert clist[0] % hL == 0
-            hL = 1 # DEBUG
-            J_alg = fact.prod() # DEBUG # (L['x'].gen()**hL - fact.prod()).roots(L)[0][0]
-            remainder = clist[0] // hL
+            J_alg = prod(u**-a for u, a in zip(V[1:],clist[1:]))
+            remainder = clist[0]
             try:
-                check = (phi(J_alg) / K_to_Cp(J)**remainder).log(lp).valuation() >= prec
+                check = (phi(J_alg) / K_to_Cp(J)**remainder).log(0).valuation() >= prec
                 if not check:
                     print('Did not pass check! Returning value anyway...')
             except ValueError as e:

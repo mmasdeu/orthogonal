@@ -3,7 +3,6 @@ from sage.rings.padics.precision_error import PrecisionError
 from multiprocessing import Process, Manager, Pool, cpu_count
 from concurrent import futures
 from sage.misc.timing import cputime
-from sage.libs.pari import pari
 from util import *
 
 def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=500):
