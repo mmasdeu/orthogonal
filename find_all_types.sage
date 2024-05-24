@@ -116,9 +116,9 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
                                 ans = None
                             if ans is not None:
                                 success = True
-                                ffpoly, rec, clist_ans, field = ans
+                                ffpoly, rec, d, clist_ans, field = ans
                                 fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }...', outfile)
-                                fwrite(f'SUCCESS {char} with lindep: ' + str(Jtau.unit_part().add_bigoh(10)) + f'({ffpoly}, {field}, {rec}, 0, 1, {clist_ans}, {H.defining_polynomial()})', outfile)
+                                fwrite(f'SUCCESS {char} with lindep: ' + str(Jtau.unit_part().add_bigoh(10)) + f'({ffpoly}, {field}, {rec}, {d}, 0, 1, {clist_ans}, {H.defining_polynomial()})', outfile)
 
                         if not success:
                             fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }... ({char} not recognized)', outfile)

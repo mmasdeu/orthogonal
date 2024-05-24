@@ -41,7 +41,8 @@ $(document).ready(function () {
 		        title === "label" ||
 		        title === "char" ||
 		        title === "trivial" ||
-		        title === "recognized"
+		        title === "recognized" ||
+			title === "o(ζ)"
 		       ) {
 
 			// Create select element

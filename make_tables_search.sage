@@ -54,7 +54,7 @@ def get_Dn(ln):
 
 def get_poly_and_field(ln):
     x = ZZ['x'].gen()
-    data_list = re.search('.*O\(.*\^10\)\(([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), (.*), (.*)\)(.*)', ln).groups()
+    data_list = re.search('.*O\(.*\^10\)\(([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), (.*), (.*)\)(.*)', ln).groups()
     vals = []
     for o in data_list:
         try:
@@ -62,14 +62,14 @@ def get_poly_and_field(ln):
         except (NameError, SyntaxError):
             newval = copy(o)
         vals.append(newval)
-    poly, field, nrm, i, denom, pw, hpoly, msg = vals
+    poly, field, nrm, d, i, denom, pw, hpoly, msg = vals
     if type(pw) == list:
         pw = print_factorization(pw)
     if 'algdep' in ln:
         pw += ' (a)' + msg
     else: # lindep
         pw += ' (l)' + msg
-    return poly, field, pw, hpoly
+    return poly, field, d, pw, hpoly
 
 def get_header(fname):
     fsp = (fname.split('/')[-1]).strip('.txt').split('_')[1:]
@@ -100,7 +100,7 @@ def make_table(fname):
                 val['D'] = Dn
                 if 'Jtau = 1' in ln:
                     v1 = copy(val)
-                    v1.update({'field' : 'x', 'factor' : 'J = (1)', 'poly' : 'x - 1', 'hpoly' : '-', 'J' : '1', 'trivial' : True, 'recognized' : True})
+                    v1.update({'field' : 'x', 'factor' : 'J = (1)', 'poly' : 'x - 1', 'hpoly' : '-', 'J' : '1', 'trivial' : True, 'recognized' : True, 'o(ζ)' : 1})
                     v2 = copy(v1)
                     v1['char'] = 'triv'
                     v2['char'] = 'conj'
@@ -113,14 +113,14 @@ def make_table(fname):
                 if 'not recognized' in ln:
                     v1 = copy(val)
                     J, char = (J, 'triv') if 'triv' in ln else (J, 'conj')
-                    v1.update({'char' : char, 'field' : '?', 'factor' : '?', 'poly' : '?', 'hpoly' : '?', 'J' : J, 'trivial' : False, 'recognized' : False})
+                    v1.update({'char' : char, 'field' : '?', 'factor' : '?', 'poly' : '?', 'hpoly' : '?', 'J' : J, 'trivial' : False, 'recognized' : False, 'o(ζ)' : '?'})
                     ds.append(v1)
             elif 'SUCCESS' in ln:
-                poly, field, factor, hpoly = get_poly_and_field(ln)
+                poly, field, d, factor, hpoly = get_poly_and_field(ln)
                 J, char = (J, 'triv') if 'triv' in ln else (J, 'conj')
                 v1 = copy(val)
                 trivial = True if str(poly) == "x - 1" else False
-                v1.update({'char' : char, 'field' : field, 'factor' : factor, 'poly' : poly, 'hpoly' : hpoly, 'J' : J, 'trivial' : trivial, 'recognized' : True})
+                v1.update({'char' : char, 'field' : field, 'factor' : factor, 'poly' : poly, 'hpoly' : hpoly, 'J' : J, 'trivial' : trivial, 'recognized' : True, 'o(ζ)' : d})
                 ds.append(v1)
         return ds
 
@@ -182,7 +182,7 @@ def main(path='outfiles/'):
                 line('li', f'Total rows: {tot_rows}')
 
 
-            columns = ['p', 'label', 'D', 'type', 'char', 'trivial', 'recognized', 'field', 'factor', 'poly', 'hpoly', 'J']
+            columns = ['p', 'label', 'D', 'type', 'char', 'trivial', 'recognized', 'field', 'factor', 'poly', 'hpoly', 'o(ζ)', 'J']
             doc.asis(df.to_html(classes=['table', 'table-striped', 'table-bordered' ], table_id='dgltable', sparsify=False, escape=False, index=False, columns=columns)[:-8]\
 +"<tfoot>\n" + " ".join(["<th>"+ i +"</th>\n" for i in columns])+"</tr>\n  </tfoot></table>")
 
