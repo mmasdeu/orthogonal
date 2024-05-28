@@ -5,7 +5,7 @@ from concurrent import futures
 from sage.misc.timing import cputime
 from util import *
 
-def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=500):
+def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=600):
     r'''
     If smallRM:
     - If char == triv: return F
@@ -15,21 +15,30 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
     - If char == triv: return HCF of Q(sqrt(-D))
     - If char == conj: return Q
     '''
-    if typ not in ['smallRM','smallCM'] or n != 1:
+    if typ in ['smallRM','smallCM'] and n != 1:
         return None, None
     if char not in ['triv', 'conj']:
         raise ValueError('Parameter "char" must be either "triv" or "conj"')
     x = QQ['x'].gen()
     if typ == 'smallCM':
         D = -D
-    L.<a> = QuadraticField(D)
-    M = (L.composite_fields(F, names='t')[0]).absolute_field(names='t1')
+    if typ == 'bigRM':
+        alpha = ATR_alpha(D,n)
+        L0 = alpha.parent()
+        L = tau_ATR_field(alpha)
+    else:
+        L.<a> = QuadraticField(D)
+        M = (L.composite_fields(F, names='t0')[0]).absolute_field(names='t1')
     if typ == 'smallCM' and char == 'conj':
         H = QQ
     else:
-        H = (L.hilbert_class_field(names='tt').composite_fields(F)[0]).absolute_field(names=names)
+        try:
+            H = (L.hilbert_class_field(names='tt').composite_fields(F)[0]).absolute_field(names=names)
+        except AttributeError:
+            H = NumberField(magma(L).HilbertClassField().AbsoluteField().DefiningPolynomial()._sage_(),names='tt').composite_fields(F)[0].absolute_field(names=names)
     prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
-    prime_list = [p for p in prime_list if len(M.ideal(p).factor()) < M.degree()]
+    if typ != 'bigRM':
+        assert all(len(M.ideal(p).factor()) < M.degree() for p in prime_list)
     return H, prime_list
 
 # Related to Manin Trick
@@ -471,12 +480,7 @@ def smallRMcycle(D):
     return A, [t0, t0], hE # not a typo!
 
 def bigRMcycle(D, n=1):
-    found = False
-    K.<t> = QuadraticField(D)
-    try:
-        alpha = K.elements_of_norm(-1)[0] * n
-    except IndexError:
-        raise ValueError(f'Discriminant (={D}) not admissible: no elements of norm -1 in QQ(sqrt(D))')
+    alpha = ATR_alpha(D, n)
     A, tau0, tau1 = compute_gamma_tau_ATR(alpha)
     E = tau_ATR_field(alpha)
     return A, [tau0, tau1], E.class_number()
@@ -696,6 +700,13 @@ def compute_gamma_tau(D):
             assert gamma_tau[1][0] % 2 == 0
             return gamma_tau
         n +=1
+
+
+def ATR_alpha(D, n=1):
+    try:
+        return QuadraticField(D, names='t').elements_of_norm(-1)[0] * n
+    except IndexError:
+        raise ValueError(f'Discriminant (={D}) not admissible: no elements of norm -1 in QQ(sqrt(D))')
 
 
 def tau_ATR_field(alpha, names='w'):

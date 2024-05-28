@@ -62,7 +62,7 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
         for cycle_type in cycle_types:
             outfile = outdir + '/' + f'points_{cycle_type}_{p}_{label}_{M}.txt'
             if cycle_type == 'bigRM':
-                nvalues = [-7, -6, -5, -3, -3, -1, 1, 2, 3, 5, 6, 7]
+                nvalues = [ZZ(o) for o in range(-10, 11) if o != 0]
             else:
                 nvalues = [1]
             for n in nvalues:
@@ -108,7 +108,7 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
                                         msg += ' warning: ' + str([q for q in support if q not in prime_list])
                                 fwrite(msg, outfile)
                                 break
-                        if not success and cycle_type in ['smallRM', 'smallCM'] and prime_list is not None:
+                        if not success and prime_list is not None and ('big' not in typ or H.degree() <= 16):
                             with stopit.ThreadingTimeout(3600) as to_ctx_mgr:
                                 ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, degree_bound=8, algorithm='pari')
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
