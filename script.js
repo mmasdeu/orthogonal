@@ -20,7 +20,7 @@ $(document).ready(function () {
 	fixedHeader: true,
 	autoWidth: true,
 	columnDefs: [ {
-	    targets: [9, 10, 11],
+	    targets: [9, 10, 12],
 	    render: $.fn.dataTable.render.ellipsis( 20 )
 	} ],
 	buttons: [

@@ -804,7 +804,7 @@ def recognize_DGL_lindep(J, L, prime_list, Cp = None, units=None, outfile=None, 
             found = False
             for i, zeta in enumerate(Cp.roots_of_unity()):
                 if (phiJalg - (zeta * Jpr)).valuation() >= .75 * prec:
-                    d = ZZ(n / mcd(n, i))
+                    d = ZZ(n / ZZ(n).gcd(i))
                     found = True
                     break
             if not found:
