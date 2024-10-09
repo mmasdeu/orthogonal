@@ -61,14 +61,11 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
     for D in Dvalues:
         for cycle_type in cycle_types:
             outfile = outdir + '/' + f'points_{cycle_type}_{p}_{label}_{M}.txt'
-            if cycle_type == 'bigRM':
-                nvalues = [ZZ(o) for o in range(-10, 11) if o != 0]
-            else:
-                nvalues = [1]
+            nvalues = [1]
             for n in nvalues:
                 try:
                     try:
-                        Jtau0, hE = RMCEval(D, cycle_type, M, n, return_class_number=True)
+                        Jtau0, hE = RMCEval(D, cycle_type, M, n=n, return_class_number=True)
                         Cp = Jtau0.parent()
                     except (ValueError, NotImplementedError, TypeError, RuntimeError, PrecisionError, SignalError, KeyboardInterrupt, ModuleNotFoundError) as e:
                         fwrite(f'Skipping {D},{n},{cycle_type}...({str(e)})', logfile)

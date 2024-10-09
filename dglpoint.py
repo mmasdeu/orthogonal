@@ -85,7 +85,7 @@ def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, ti
     if isinstance(D,tuple):
         D, n = D
     else:
-        n = 1
+        n = None
     w = F.elements_of_norm(p)[0]
     Fp = Qp(p,2*M, type='floating-point')
     Rp = Zmod(p**M)
