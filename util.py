@@ -718,7 +718,7 @@ def recognize_DGL_lindep(J, L, prime_list, Cp = None, units=None, outfile=None, 
                 hL = hL0
                 glist.append((gens[0], hL, ell))
         glist = [(g**ZZ(hL / e), ell) for g, e, ell in glist if phi(g).valuation() == 0]
-        norm_one = J.norm() == 1
+        norm_one = kwargs.get('norm_one', J.norm() == 1)
         while len(glist) > 0:
             g0, ell = glist[0]
             phiv = phi(g0)

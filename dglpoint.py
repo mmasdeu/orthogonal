@@ -2,7 +2,7 @@ from util import *
 from fire import Fire
 import stopit
 
-from sage.all import QuadraticField, load, Integer, RealNumber, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq, srange, ModularForms, IntegralLattice
+from sage.all import QuadraticField, load, Integer, RealNumber, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq, srange, ModularForms, IntegralLattice, BinaryQF_reduced_representatives
 # Calculate DGL periods
 
 parallelize = True
@@ -77,27 +77,11 @@ def cocycle(q : int, label : str, M : int, fname=None):
 
 def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, timeout=20, outfile=None, logfile=None, max_degree=16):
     global L0, J, p, F, parallelize, phi, Fp, Ruv, Rp, map_poly, inv_map_poly
-    p = q
-    if fname is None:
-        if not isinstance(label, str):
-            label = label_from_functional(label)
-        fname = f'L0Jtuple_{p}_{label}_{M}.sobj'
+    Jtau, hE = evaluate(q, label, D, cycle_type, M, fname)
     if isinstance(D,tuple):
         D, n = D
     else:
         n = 1
-    w = F.elements_of_norm(p)[0]
-    Fp = Qp(p,2*M, type='floating-point')
-    Rp = Zmod(p**M)
-    phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
-    if phi(w).valuation() == 0:
-        phi = F.hom([F.gen().minpoly().roots(Fp)[1][0]],check=False)
-    Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
-    inv_map_poly = Ruv.flattening_morphism()
-    map_poly = inv_map_poly.inverse()
-    load('orthogonal.sage')
-    L0, J = load(fname)
-    Jtau, hE = RMCEval(D, cycle_type, M, n, return_class_number=True)
     success = False
     for deg in [2**i for i in range(1, 10) if 2**i <= max_degree]:
         with stopit.ThreadingTimeout(timeout) as to_ctx_mgr:
@@ -138,11 +122,10 @@ def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
     map_poly = inv_map_poly.inverse()
     load('orthogonal.sage')
     L0, J = load(fname)
-    x = RMCEval(D, cycle_type, M, n)
+    Jtau, hE = RMCEval(D, cycle_type, M, n, return_class_number=True)
     if __name__ == '__main__':
-        print(x)
-    else:
-        return x
+        print(Jtau)
+    return Jtau, hE
 
 def sum_of_squares(n):
     return all(e % 2 == 0 for p, e in ZZ(n).factor() \
