@@ -5,6 +5,8 @@ from concurrent import futures
 from sage.misc.timing import cputime
 from util import *
 
+load('find_E_and_L.sage')
+
 def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=600):
     r'''
     If smallRM:
@@ -23,9 +25,11 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
     if typ == 'smallCM':
         D = -D
     if typ == 'bigRM':
-        alpha = ATR_alpha(D,n)
+        # alpha = ATR_alpha(D,n)
+        alpha = get_F_and_alpha(D)[1]
         L0 = alpha.parent()
-        L = tau_ATR_field(alpha)
+        L1 = tau_ATR_field(alpha)
+        L.<t> = L1.absolute_field()
     else:
         L.<a> = QuadraticField(D)
         M = (L.composite_fields(F, names='t0')[0]).absolute_field(names='t1')
@@ -479,13 +483,26 @@ def smallRMcycle(D):
     hE = QuadraticField(D,'w').class_number()
     return A, [t0, t0], hE # not a typo!
 
-def bigRMcycle(D, n=1):
-    alpha = ATR_alpha(D, n)
+def bigRMcycle_old(D, alpha=None, n=1):
+    if alpha is None:
+        alpha = ATR_alpha(D, n)
+    else:
+        assert n == 1, 'n would not be used'
     A, tau0, tau1 = compute_gamma_tau_ATR(alpha)
     E = tau_ATR_field(alpha)
     return A, [tau0, tau1], E.class_number()
 
-def RMCEval(D, cycle_type, prec, n=1, return_class_number=False):
+def bigRMcycle(D, alpha=None, n=1):
+    assert alpha is None and n == 1
+    try:
+        alpha = get_F_and_alpha(D)[1]
+    except KeyError:
+        raise ValueError(f'No bigRM cycle computed for discriminant {D}')
+    A, tau0, tau1 = compute_gamma_tau_ATR(alpha)
+    E = tau_ATR_field(alpha)
+    return A, [tau0, tau1], E.class_number()
+
+def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     global L0, J, ncpus
     try:
         ncpus = ncpus
@@ -498,12 +515,13 @@ def RMCEval(D, cycle_type, prec, n=1, return_class_number=False):
     else:
         if cycle_type != 'bigRM':
             raise NotImplementedError('Cycle type should be either "smallCM" or "smallRM" or "bigRM"')
-        A, tau0, hE = bigRMcycle(D, n)
+        A, tau0, hE = bigRMcycle(D, alpha=alpha, n=n)
 
     if any(t.trace() == 2 * t for t in tau0):
-        raise ValueError(f'Tuple {(D,n) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
+        raise ValueError(f'Tuple {(D, alpha) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
     mlist0 = matrices_for_unimodular_path(A[0,0], A[1,0])
     mlist = sum((good_matrices(m) for m in mlist0),[])
+
     res0 = prod(Eval0(L0, act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
     if parallelize:
         res1 = 1
@@ -722,6 +740,7 @@ def compute_gamma_tau_ATR(alpha):
     E = tau_ATR_field(alpha,'w')
     w = E.gen()
     K = F
+    i = K.gen()
     MM.<gMM> = E.galois_closure()
     if MM.disc() % p == 0:
         raise NotImplementedError('tau lives in a ramified extension') # p ramifies in MM so we would need to work with ramified extensions

@@ -1,4 +1,6 @@
 import pandas as pd
+import time
+import os
 import glob
 import fire
 import re
@@ -159,7 +161,8 @@ def main(path='outfiles/'):
 
 
             line('h1', 'Tables of DGL points')
-            line('p', f'Last update: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+            last_update = time.ctime(max(os.path.getmtime(root) for root,_,_ in os.walk(path)))
+            line('p', f'Last update: {last_update}')
             line('h2', 'Experimental observations')
             with tag('ul'):
                 line('li', 'smallCM + conj is always 1: smallCM points are always defined over Qp')
@@ -183,6 +186,7 @@ def main(path='outfiles/'):
             line('h2', 'Column description')
             with tag('ul'):
                 line('li', 'p : prime')
+                line('li', 'label : the cocycle being used. The numbers before the "_" have coefficient +1, while the numbers after have coefficient -1. Repeated numbers mean that the corresponding coefficient is larger.')
                 line('li', 'D : absolute value of discriminant')
                 line('li', 'type : either smallCM or smallRM')
                 line('li', 'char : "triv" means J·J\' and "conj" means J/J\'')
