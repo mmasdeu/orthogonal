@@ -519,6 +519,20 @@ def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
 
     if any(t.trace() == 2 * t for t in tau0):
         raise ValueError(f'Tuple {(D, alpha) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
+
+    found = False    
+    for c in random_candidate_matrices(r, limit=10**5):
+        try:
+            m = c * A
+            # print('c = ',c.list())
+            mlist0 = matrices_for_unimodular_path(m[0,0], m[1,0])
+            mlist = sum((good_matrices(o) for o in mlist0),[])
+            found = True
+        except RuntimeError:
+            continue
+    if not found:
+        raise RuntimeError('Good matrix not found')
+    
     mlist0 = matrices_for_unimodular_path(A[0,0], A[1,0])
     mlist = sum((good_matrices(m) for m in mlist0),[])
 
