@@ -65,11 +65,13 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
             for n in nvalues:
                 try:
                     try:
+                        fwrite(f'Computing {fname} {D},{n},{cycle_type}...', logfile)
                         Jtau0, hE = RMCEval(D, cycle_type, M, n=n, return_class_number=True)
                         Cp = Jtau0.parent()
                     except (ValueError, NotImplementedError, TypeError, RuntimeError, PrecisionError, SignalError, KeyboardInterrupt, ModuleNotFoundError) as e:
-                        fwrite(f'Skipping {D},{n},{cycle_type}...({str(e)})', logfile)
+                        fwrite(f'Skipping {fname} {D},{n},{cycle_type}...({str(e)})', logfile)
                         continue
+                    fwrite(f'Computed Jtau for {fname} {D} {n} {cycle_type}.', logfile)
                     if Jtau0 == 1:
                         fwrite(f'Computed Jtau = 1 for {D = } {n = } {hE = }...', outfile)
                         continue
