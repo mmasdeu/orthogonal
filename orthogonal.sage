@@ -520,7 +520,8 @@ def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     if any(t.trace() == 2 * t for t in tau0):
         raise ValueError(f'Tuple {(D, alpha) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
 
-    found = False    
+    found = False 
+    r = A.parent().base_ring().gen()   
     for c in random_candidate_matrices(r, limit=10**5):
         try:
             m = c * A
