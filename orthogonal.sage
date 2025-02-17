@@ -455,12 +455,12 @@ def good_matrices(m):
         m = matrix([[b, a], [d, c]])
         return [ (m, 1) ]
     else:
+        delta = -(m.determinant())
+        A, B, C, D = m.list()
         for d1, d2 in cartesian_product_iterator([[1,-1,r,-r] for _ in range(2)]):
-            delta = -(m.determinant())
-            A, B, C, D = m.list()
-            y = matrix([[-C, d1], [D, d2]]).determinant()/delta
+            y = matrix([[-C, d1], [D, d2]]).determinant() / delta
             if y in I:
-                x = matrix([[d1, A], [d2, -B]]).determinant()/delta
+                x = matrix([[d1, A], [d2, -B]]).determinant() / delta
                 m1 = matrix([[A,x],[C,y]])
                 m2 = matrix([[x,B],[y,D]])
                 m1.rescale_col(1, -d1**-1)
@@ -502,6 +502,15 @@ def bigRMcycle(D, alpha=None, n=1):
     E = tau_ATR_field(alpha)
     return A, [tau0, tau1], E.class_number()
 
+def good_matrices_random(m, limit=10**5):
+    r = m[0,0].parent().gen()
+    for it, c in enumerate(random_candidate_matrices(r, limit=limit)):
+        try:
+            return good_matrices(c * m), c
+        except RuntimeError:
+            continue
+    raise RuntimeError('No good matrix found')
+
 def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     global L0, J, ncpus
     try:
@@ -521,19 +530,18 @@ def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
         raise ValueError(f'Tuple {(D, alpha) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
 
     found = False 
-    r = A.parent().base_ring().gen()   
-    for c in random_candidate_matrices(r, limit=10**5):
-        try:
-            m = c * A
-            # print('c = ',c.list())
-            mlist0 = matrices_for_unimodular_path(m[0,0], m[1,0])
-            mlist = sum((good_matrices(o) for o in mlist0),[])
-            found = True
-        except RuntimeError:
-            continue
-    if not found:
-        raise RuntimeError('Good matrix not found')
+    r = A.parent().base_ring().gen()
+    mlist0 = matrices_for_unimodular_path(A[0,0], A[1,0])
+    try:
+        mlist = []
+        for m in mlist0:
+            tmp, c = good_matrices_random(m,limit=100)
+            mlist.extend(tmp)
+    except RuntimeError:
+        print('gamma_tau = ', A.list())
+        raise RuntimeError
 
+    print('Now computing...')
     res0 = prod(Eval0(L0, act_matrix(m.apply_morphism(phi).adjugate(), tau0))**sgn for m,sgn in mlist)
     if parallelize:
         res1 = 1
