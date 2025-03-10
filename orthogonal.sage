@@ -124,14 +124,7 @@ def compute_Ms(p, q):
 
 # given a, c in Z[i] returns the matrices that Mi such that {Infinity, a/c} = {M0(0), M0(Infinity)} + {M1(0), M1(Infinity)} + ... as in display (2.1.8) of Cremona's book
 def matrices_for_unimodular_path(a,c):
-    cf = continued_fraction(a, c)
-    p, q = compute_convergents(cf)
-    return compute_Ms(p, q)
-
-
-# checking
-def act_mobius(a,b,c,d,tau):
-    return act_matrix(matrix([[a,b],[c,d]]), tau)
+    return compute_Ms(*compute_convergents(continued_fraction(a,c))
 
 def act_matrix(gamma, tau):
     if isinstance(tau, list):
@@ -154,6 +147,28 @@ def all_elements_of_norm(F, n):
         units = [F(eps**i) for i in range(eps.multiplicative_order())]
         return [u * beta for beta in F.elements_of_norm(n) for u in units]
 
+def intersecting_vectors_in_lattice(p, n, r=0):
+    resp = []
+    resm = []
+    for mac in range(1,n+1):
+        RHS = n - mac
+        betas = all_elements_of_norm(F, RHS)
+        for mc in divisors(mac):
+            a = mac // mc
+            condition = a % p == 0 and mc % p == 0
+            for beta in betas:
+                if condition and (beta / p).is_integral():
+                    continue
+                else:
+                    new_mat = Matrix([[beta.conjugate(), mc], [a, -beta]])
+                    if a % 4 == 1:
+                        resp.append(new_mat)
+                    elif a % 4 == 3:
+                        resm.append(-new_mat)
+    return resp, resm
+
+# Given a prime p, returns two lists corresponding to
+# p-primitive elements of norm n
 def vectors_in_lattice(p, n):
     resp = []
     resm = []
@@ -339,9 +354,6 @@ def Next(F, timing=False):
     else:
         return res
 
-def mul_dict(x,y):
-    return {ky : x[ky] * y[ky] for ky in x}
-
 def degrees(res):
     dumax = max(ff.degree() for ff in res.values())
     dvmax = max(o.degree() for ff in res.values() for o in ff.coefficients())
@@ -375,7 +387,7 @@ def RMC(F, M):
     if parallelize:
         with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
             while len(res) > 1:
-                future_dict = {executor.submit(mul_dict, res[i], res[i+1]) : i for i in range(0,len(res)-1, 2) }
+                future_dict = {executor.submit(lambda x, y: {ky : x[ky] * y[ky] for ky in x}, res[i], res[i+1]) : i for i in range(0,len(res)-1, 2) }
                 res = [] if len(res) % 2 == 0 else [res[-1]]
                 for fut in futures.as_completed(future_dict):
                     res.append(fut.result())
@@ -387,22 +399,6 @@ def RMC(F, M):
     psi = R0.hom([ZZ['u'].gen()],base_map=lambda x:x.lift(),check=False)
     ans = {ky : f.change_ring(psi) for ky, f in ans.items()}
     return ans
-
-def RMC_noprod(F, M):
-    FF = F
-    res = [F]
-    for j in range(1,M):
-        print(f'Iteration {j}')
-        t = walltime()
-        FF0, (t1, t2, t3) = Next(FF,timing=True)
-        FF, (tt1, tt2, tt3) = Next(FF0,timing=True)
-        t1 += tt1
-        t2 += tt2
-        t3 += tt3
-        res.append(FF)
-        d = degrees(FF)
-        print(f'..done in {walltime(t)} seconds. {t1 = :.2f}, {t2 = :.2f}, {t3 = :.2f}. Degrees: {d}')
-    return res
 
 def fixed_point(g, phi):
     a, b, c, d = g.list()
@@ -419,26 +415,27 @@ def Eval0(L0, tau):
     vv = vector([-1, t0])
     ww = vector([t1, 1])
     KK = vv.parent().base_ring()
-    ans = prod((vv * num.apply_morphism(phi).apply_map(lambda o : KK(o)) * ww) / (vv * den.apply_morphism(phi).apply_map(lambda o : KK(o)) * ww) for num, den in zip(*L0))
-    return ans
+    return prod((vv * num.apply_morphism(phi).apply_map(lambda o : KK(o)) * ww) / (vv * den.apply_morphism(phi).apply_map(lambda o : KK(o)) * ww) for num, den in zip(*L0))
 
-def EvalPS(f, x0, x1, prec):
-    ans = 1
-    x0s = [1, x0]
-    x1s = [1, x1]
-    for _ in range(prec):
-        x0s.append(x0 * x0s[-1])
-        x1s.append(x1 * x1s[-1])
-    return sum(sum(o * x0s[j] for o, j in zip(a.coefficients(), a.exponents()) if j < prec) * x1s[i] for a, i in zip(f.coefficients(), f.exponents()) if i < prec)
 
 def Eval(tau, prec):
     global J
     t0, t1 = tau
     ans = 1
+    x0s = {[1] for _ in range(p+1)}
+    x1s = {[1] for _ in range(p+1)}
+    for i in range(p+1):
+        x0 = t0 if i == p else 1/(t0 - i)
+        x1 = t1 if i == p else 1/(t1 - i)
+        for _ in range(prec+1):
+            x0s[i].append(x0 * x0s[i][-1])
+            x1s[i].append(x1 * x1s[i][-1])
     for ky in J:
-        x0 = t0 if ky[0] == p else 1/(t0 - ky[0])
-        x1 = t1 if ky[1] == p else 1/(t1 - ky[1])
-        ans *= EvalPS(J[ky], x0, x1, prec)
+        f = J[ky]
+        x00 = x0s[ky[0]]
+        x11 = x1s[ky[1]]
+        ans *= sum(sum(o * x00[j] for o, j in zip(a.coefficients(), a.exponents()) if j < prec) * x11[i] \
+            for a, i in zip(f.coefficients(), f.exponents()) if i < prec)
     return ans
 
 
@@ -548,9 +545,10 @@ def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
         with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
             future_dict = {executor.submit(Eval, act_matrix(m.apply_morphism(phi).adjugate(), tau0), prec) : sgn for m, sgn in mlist}
             for fut in futures.as_completed(future_dict):
-                res1 *= fut.result()**(future_dict[fut])
+                sgn = future_dict[fut]
+                res1 *= fut.result()**sgn
     else:
-        res1 = prod(Eval(act_matrix(m.apply_morphism(phi).adjugate(), tau0), prec)**sgn for m,sgn in mlist)
+        res1 = prod(Eval(act_matrix(m.apply_morphism(phi).adjugate(), tau0), prec)**sgn for m, sgn in mlist)
     ans = res0 * res1
     ans = ans.add_bigoh(prec + ans.valuation())
     if return_class_number:
