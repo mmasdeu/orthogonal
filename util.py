@@ -270,15 +270,55 @@ def set_immutable(x):
     except AttributeError:
         return x
 
-def act_flt(g,x):
-    a,b,c,d = g.list()
-    K = x.parent()
-    if x == Infinity:
-        return a / c
-    if K(c) * x + K(d) == 0:
-        return Infinity
+def list_powers(x, M):
+    if x is None:
+        return x
+    plist = [x.parent()(1)]
+    for i in range(M):
+        plist.append(x * plist[-1])
+    return plist
+
+
+def label_from_functional(func, sep='·'):
+    pos = ''
+    neg = ''
+    for i, o in enumerate(func):
+        if o > 0:
+            pos = pos + o * (sep + str(i+1))
+        elif o < 0:
+            neg = neg + (-o) * (sep + str(i+1))
+    return pos[1:] + '_' + neg[1:]
+
+def functional_from_label(label, sep='·'):
+    func = {}
+    pos, neg = label.split('_')
+    for i in pos.split(sep):
+        try:
+            func[int(i)-1] += 1
+        except KeyError:
+            func[int(i)-1] = 1
+    for i in neg.split(sep):
+        try:
+            func[int(i)-1] -= 1
+        except KeyError:
+            func[int(i)-1] = -1
+    lfunc = max(func.keys()) + 1
+    ans = [0 for _ in range(lfunc)]
+    for ky, val in func.items():
+        ans[ky] = val
+    return tuple(ans)
+
+def act_flt(gamma, tau):
+    if isinstance(tau, list):
+        return [act_flt(gamma, t) for t in tau]
+    a, b, c, d = gamma.list()
+    # K = tau.parent()
+    if tau == 0:
+        return b / d if d else Infinity
+    elif tau == Infinity:
+        return a / c if c else Infinity
     else:
-        return (K(a)*x + K(b))/(K(c)*x + K(d))
+        return (a*tau + b) / (c*tau + d)
 
 def tate_parameter(E,R):
     p = R.prime()

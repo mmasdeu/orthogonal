@@ -8,11 +8,14 @@ from sage.rings.padics.precision_error import PrecisionError
 from cysignals.signals import SignalError
 from builtins import ModuleNotFoundError
 
-F.<i> = QuadraticField(-1)
+global J
+
+J = None
 ncpus = 4
 parallelize = True
 
-load('orthogonal.sage')
+from dglpoint import *
+# load('orthogonal.sage')
 # cocycle_fnames = sorted(glob('L0Jtuple*.sobj'))
 
 def get_p_prec(f):
@@ -27,7 +30,6 @@ def get_label(f):
 
 # This command can run all of it
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
-
 
 def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log'):
     global L0, J, M, F, p, Rp, phi
@@ -55,8 +57,8 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
     Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
     inv_map_poly = Ruv.flattening_morphism()
     map_poly = inv_map_poly.inverse()
-    load('orthogonal.sage')
-    L0, J = load(fname)
+    # load('orthogonal.sage')
+    J = load(fname)
     label = get_label(fname)
     for D in Dvalues:
         for cycle_type in cycle_types:
@@ -125,8 +127,8 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
                 except KeyboardInterrupt:
                     fwrite(f'WARNING! Keyboard interrupt so skipping {cycle_type = } {p = } {label = } {D = }, {n = }', logfile)
                     sleep(1)
-                except Exception as e:
-                    fwrite(f'WARNING! Unhandled exception so skipping {cycle_type = } {p = } {label = } {D = }, {n = } : {str(e)}', logfile)
+                # except Exception as e:
+                #     fwrite(f'WARNING! Unhandled exception so skipping {cycle_type = } {p = } {label = } {D = }, {n = } : {str(e)}', logfile)
 
 
 
