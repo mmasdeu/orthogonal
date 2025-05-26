@@ -26,7 +26,30 @@ from builtins import ModuleNotFoundError
 global G
 
 x = QQ['x'].gen()
-valid_ATR_fields = dict([(41, x**4 + 4*x**3 + x**2 - 6*x - 8), (113, x**4 - 28*x**2 - 256), (137, x**4 + 4*x**3 + 105*x**2 + 202*x - 224), (313, x**4 + 4*x**3 - 111*x**2 - 230*x - 3032), (337, x**4 + 4*x**3 - 3*x**2 - 14*x - 72), (409, x**4 - 12*x**2 - 1600), (457, x**4 + 4*x**3 - 15*x**2 - 38*x - 24), (521, x**4 - 44*x**2 - 1600), (569, x**4 + 4*x**3 - 111*x**2 - 230*x - 8216), (593, x**4 - 92*x**2 - 256), (809, x**4 + 4*x**3 + x**2 - 6*x - 200), (857, x**4 + 4*x**3 - 255*x**2 - 518*x - 584), (881, x**4 + 4*x**3 - 219*x**2 - 446*x - 5408), (1153, x**4 + 4*x**3 - 27*x**2 - 62*x - 48), (1201, x**4 + 4*x**3 - 219*x**2 - 446*x - 11888), (1217, x**4 - 124*x**2 - 1024), (1249, x**4 - 60*x**2 - 4096), (1321, x**4 + 4*x**3 - 39*x**2 - 86*x - 26288), (1553, x**4 - 92*x**2 - 4096), (1657, x**4 - 68*x**3 - 1276*x**2 + 135712*x + 1478656), (1777, x**4 - 156*x**2 - 1024), (1889, x**4 + 4*x**3 - 11*x**2 - 30*x - 416), (1993, x**4 - 172*x**2 - 576), (2113, x**4 + 4*x**3 - 291*x**2 - 590*x - 21032), (2129, x**4 - 92*x**2 - 6400), (2273, x**4 + 4*x**3 + 53*x**2 + 98*x + 32), (2377, x**4 + 4*x**3 - 183*x**2 - 374*x - 39392), (2521, x**4 - 140*x**2 - 5184), (2593, x**4 + 4*x**3 - 147*x**2 - 302*x - 46808), (2617, x**4 + 4*x**3 + 465*x**2 + 922*x + 136), (2657, x**4 + 4*x**3 - 435*x**2 - 878*x - 5624), (2689, x**4 + 4*x**3 - 27*x**2 - 62*x - 432), (2729, x**4 + 4*x**3 - 39*x**2 - 86*x - 54800), (2833, x**4 - 92*x**2 - 9216), (2953, x**4 + 4*x**3 - 47*x**2 - 102*x - 88), (3001, x**4 - 204*x**2 - 1600), (3089, x**4 + 4*x**3 + 501*x**2 + 994*x - 800), (3217, x**4 + 4*x**3 - 3*x**2 - 14*x - 792), (3361, x**4 - 60*x**2 - 12544), (3433, x**4 - 100*x**3 - 2684*x**2 + 369056*x + 6718464), (3593, x**4 + 4*x**3 - 47*x**2 - 102*x - 248), (3761, x**4 + 4*x**3 - 219*x**2 - 446*x - 63728), (3881, x**4 - 236*x**2 - 1600), (3929, x**4 - 140*x**2 - 10816), (4049, x**4 - 220*x**2 - 4096), (4073, x**4 + 4*x**3 - 327*x**2 - 662*x - 55088), (4177, x**4 + 4*x**3 - 75*x**2 - 158*x - 83024), (4273, x**4 + 4*x**3 - 507*x**2 - 1022*x - 21248), (4289, x**4 + 4*x**3 - 59*x**2 - 126*x - 80), (4513, x**4 - 188*x**2 - 9216), (4657, x**4 - 148*x**3 - 476*x**2 + 589472*x + 8856576), (4721, x**4 + 4*x**3 - 219*x**2 - 446*x - 83168), (4793, x**4 + 4*x**3 - 111*x**2 - 230*x - 93752), (4801, x**4 + 4*x**3 - 59*x**2 - 126*x - 208), (4817, x**4 + 4*x**3 - 363*x**2 - 734*x - 63872), (4969, x**4 + 4*x**3 - 327*x**2 - 662*x - 73232), (4993, x**4 - 244*x**3 + 13348*x**2 + 347168*x + 589824), (5233, x**4 - 28*x**2 - 20736), (5393, x**4 + 4*x**3 - 651*x**2 - 1310*x - 1952), (5641, x**4 + 4*x**3 + 81*x**2 + 154*x + 72), (5657, x**4 + 4*x**3 - 543*x**2 - 1094*x - 39752), (5801, x**4 + 4*x**3 + x**2 - 6*x - 1448), (5897, x**4 - 44*x**2 - 23104), (6073, x**4 + 4*x**3 - 71*x**2 - 150*x - 112), (6217, x**4 + 4*x**3 - 183*x**2 - 374*x - 117152), (6329, x**4 + 4*x**3 - 71*x**2 - 150*x - 176), (6353, x**4 + 4*x**3 - 651*x**2 - 1310*x - 21392), (6449, x**4 - 28*x**2 - 25600), (6473, x**4 - 164*x**3 - 2172*x**2 + 936608*x + 19784704), (6529, x**4 + 4*x**3 - 579*x**2 - 1166*x - 47240), (6689, x**4 + 4*x**3 - 11*x**2 - 30*x - 1616), (7001, x**4 - 140*x**2 - 23104), (7121, x**4 - 220*x**2 - 16384), (7193, x**4 - 260*x**3 + 12036*x**2 + 862496*x + 5914624), (7321, x**4 + 4*x**3 - 543*x**2 - 1094*x - 73448), (7369, x**4 + 4*x**3 - 759*x**2 - 1526*x - 3680), (7393, x**4 - 188*x**2 - 20736), (7417, x**4 - 76*x**2 - 28224), (7489, x**4 + 4*x**3 - 291*x**2 - 590*x - 129896), (7793, x**4 - 28*x**2 - 30976), (7841, x**4 - 316*x**2 - 6400), (8009, x**4 + 4*x**3 - 79*x**2 - 166*x - 280), (8089, x**4 - 268*x**2 - 14400), (8161, x**4 + 4*x**3 - 75*x**2 - 158*x - 480), (8209, x**4 - 220*x**2 - 20736), (8273, x**4 - 84*x**3 - 13532*x**2 + 907168*x + 58491904), (8297, x**4 + 4*x**3 + 825*x**2 + 1642*x + 496), (8329, x**4 - 300*x**2 - 10816), (8369, x**4 + 4*x**3 - 19*x**2 - 46*x - 1960), (8377, x**4 - 204*x**2 - 23104), (8521, x**4 + 4*x**3 - 759*x**2 - 1526*x - 27008), (8609, x**4 - 188*x**2 - 25600), (8681, x**4 - 364*x**2 - 1600), (9137, x**4 - 284*x**2 - 16384), (9257, x**4 - 228*x**3 + 1924*x**2 + 1558432*x + 30647296), (9377, x**4 - 316*x**2 - 12544), (9433, x**4 + 4*x**3 - 831*x**2 - 1670*x - 16712), (9473, x**4 + 4*x**3 - 867*x**2 - 1742*x - 2168), (9497, x**4 + 4*x**3 - 55*x**2 - 118*x - 1504), (9601, x**4 - 380*x**2 - 2304), (9689, x**4 - 132*x**3 - 12284*x**2 + 1408288*x + 69222400), (9697, x**4 + 4*x**3 - 75*x**2 - 158*x - 864), (9817, x**4 + 4*x**3 + 105*x**2 + 202*x + 96), (9929, x**4 + 4*x**3 - 759*x**2 - 1526*x - 55520), (10009, x**4 - 12*x**2 - 40000), (10169, x**4 + 4*x**3 - 111*x**2 - 230*x - 202616), (10177, x**4 - 124*x**2 - 36864), (10337, x**4 - 316*x**2 - 16384), (10369, x**4 - 252*x**2 - 25600), (10433, x**4 + 4*x**3 - 91*x**2 - 190*x - 352), (10513, x**4 + 4*x**3 - 651*x**2 - 1310*x - 105632)])
+valid_ATR_fields = dict([(41, x**4 + 4*x**3 + x**2 - 6*x - 8),
+                         (113, x**4 - 28*x**2 - 256),
+                         (137, x**4 + 4*x**3 + 105*x**2 + 202*x - 224),
+                         (313, x**4 + 4*x**3 - 111*x**2 - 230*x - 3032),
+                         (337, x**4 + 4*x**3 - 3*x**2 - 14*x - 72),
+                         (409, x**4 - 12*x**2 - 1600),
+                         (457, x**4 + 4*x**3 - 15*x**2 - 38*x - 24),
+                         (521, x**4 - 44*x**2 - 1600),
+                         (569, x**4 + 4*x**3 - 111*x**2 - 230*x - 8216),
+                         (593, x**4 - 92*x**2 - 256),
+                         (809, x**4 + 4*x**3 + x**2 - 6*x - 200),
+                         (857, x**4 + 4*x**3 - 255*x**2 - 518*x - 584),
+                         (881, x**4 + 4*x**3 - 219*x**2 - 446*x - 5408),
+                         (1153, x**4 + 4*x**3 - 27*x**2 - 62*x - 48),
+                         (1201, x**4 + 4*x**3 - 219*x**2 - 446*x - 11888),
+                         (1217, x**4 - 124*x**2 - 1024),
+                         (1249, x**4 - 60*x**2 - 4096),
+                         (1321, x**4 + 4*x**3 - 39*x**2 - 86*x - 26288),
+                         (1553, x**4 - 92*x**2 - 4096),
+                         (1657, x**4 - 68*x**3 - 1276*x**2 + 135712*x + 1478656),
+                         (1777, x**4 - 156*x**2 - 1024),
+                         (1889, x**4 + 4*x**3 - 11*x**2 - 30*x - 416),
+                         (1993, x**4 - 172*x**2 - 576),
+                         (2113, x**4 + 4*x**3 - 291*x**2 - 590*x - 21032), (2129, x**4 - 92*x**2 - 6400), (2273, x**4 + 4*x**3 + 53*x**2 + 98*x + 32), (2377, x**4 + 4*x**3 - 183*x**2 - 374*x - 39392), (2521, x**4 - 140*x**2 - 5184), (2593, x**4 + 4*x**3 - 147*x**2 - 302*x - 46808), (2617, x**4 + 4*x**3 + 465*x**2 + 922*x + 136), (2657, x**4 + 4*x**3 - 435*x**2 - 878*x - 5624), (2689, x**4 + 4*x**3 - 27*x**2 - 62*x - 432), (2729, x**4 + 4*x**3 - 39*x**2 - 86*x - 54800), (2833, x**4 - 92*x**2 - 9216), (2953, x**4 + 4*x**3 - 47*x**2 - 102*x - 88), (3001, x**4 - 204*x**2 - 1600), (3089, x**4 + 4*x**3 + 501*x**2 + 994*x - 800), (3217, x**4 + 4*x**3 - 3*x**2 - 14*x - 792), (3361, x**4 - 60*x**2 - 12544), (3433, x**4 - 100*x**3 - 2684*x**2 + 369056*x + 6718464), (3593, x**4 + 4*x**3 - 47*x**2 - 102*x - 248), (3761, x**4 + 4*x**3 - 219*x**2 - 446*x - 63728), (3881, x**4 - 236*x**2 - 1600), (3929, x**4 - 140*x**2 - 10816), (4049, x**4 - 220*x**2 - 4096), (4073, x**4 + 4*x**3 - 327*x**2 - 662*x - 55088), (4177, x**4 + 4*x**3 - 75*x**2 - 158*x - 83024), (4273, x**4 + 4*x**3 - 507*x**2 - 1022*x - 21248), (4289, x**4 + 4*x**3 - 59*x**2 - 126*x - 80), (4513, x**4 - 188*x**2 - 9216), (4657, x**4 - 148*x**3 - 476*x**2 + 589472*x + 8856576), (4721, x**4 + 4*x**3 - 219*x**2 - 446*x - 83168), (4793, x**4 + 4*x**3 - 111*x**2 - 230*x - 93752), (4801, x**4 + 4*x**3 - 59*x**2 - 126*x - 208), (4817, x**4 + 4*x**3 - 363*x**2 - 734*x - 63872), (4969, x**4 + 4*x**3 - 327*x**2 - 662*x - 73232), (4993, x**4 - 244*x**3 + 13348*x**2 + 347168*x + 589824), (5233, x**4 - 28*x**2 - 20736), (5393, x**4 + 4*x**3 - 651*x**2 - 1310*x - 1952), (5641, x**4 + 4*x**3 + 81*x**2 + 154*x + 72), (5657, x**4 + 4*x**3 - 543*x**2 - 1094*x - 39752), (5801, x**4 + 4*x**3 + x**2 - 6*x - 1448), (5897, x**4 - 44*x**2 - 23104), (6073, x**4 + 4*x**3 - 71*x**2 - 150*x - 112), (6217, x**4 + 4*x**3 - 183*x**2 - 374*x - 117152), (6329, x**4 + 4*x**3 - 71*x**2 - 150*x - 176), (6353, x**4 + 4*x**3 - 651*x**2 - 1310*x - 21392), (6449, x**4 - 28*x**2 - 25600), (6473, x**4 - 164*x**3 - 2172*x**2 + 936608*x + 19784704), (6529, x**4 + 4*x**3 - 579*x**2 - 1166*x - 47240), (6689, x**4 + 4*x**3 - 11*x**2 - 30*x - 1616), (7001, x**4 - 140*x**2 - 23104), (7121, x**4 - 220*x**2 - 16384), (7193, x**4 - 260*x**3 + 12036*x**2 + 862496*x + 5914624), (7321, x**4 + 4*x**3 - 543*x**2 - 1094*x - 73448), (7369, x**4 + 4*x**3 - 759*x**2 - 1526*x - 3680), (7393, x**4 - 188*x**2 - 20736), (7417, x**4 - 76*x**2 - 28224), (7489, x**4 + 4*x**3 - 291*x**2 - 590*x - 129896), (7793, x**4 - 28*x**2 - 30976), (7841, x**4 - 316*x**2 - 6400), (8009, x**4 + 4*x**3 - 79*x**2 - 166*x - 280), (8089, x**4 - 268*x**2 - 14400), (8161, x**4 + 4*x**3 - 75*x**2 - 158*x - 480), (8209, x**4 - 220*x**2 - 20736), (8273, x**4 - 84*x**3 - 13532*x**2 + 907168*x + 58491904), (8297, x**4 + 4*x**3 + 825*x**2 + 1642*x + 496), (8329, x**4 - 300*x**2 - 10816), (8369, x**4 + 4*x**3 - 19*x**2 - 46*x - 1960), (8377, x**4 - 204*x**2 - 23104), (8521, x**4 + 4*x**3 - 759*x**2 - 1526*x - 27008), (8609, x**4 - 188*x**2 - 25600), (8681, x**4 - 364*x**2 - 1600), (9137, x**4 - 284*x**2 - 16384), (9257, x**4 - 228*x**3 + 1924*x**2 + 1558432*x + 30647296), (9377, x**4 - 316*x**2 - 12544), (9433, x**4 + 4*x**3 - 831*x**2 - 1670*x - 16712), (9473, x**4 + 4*x**3 - 867*x**2 - 1742*x - 2168), (9497, x**4 + 4*x**3 - 55*x**2 - 118*x - 1504), (9601, x**4 - 380*x**2 - 2304), (9689, x**4 - 132*x**3 - 12284*x**2 + 1408288*x + 69222400), (9697, x**4 + 4*x**3 - 75*x**2 - 158*x - 864), (9817, x**4 + 4*x**3 + 105*x**2 + 202*x + 96), (9929, x**4 + 4*x**3 - 759*x**2 - 1526*x - 55520), (10009, x**4 - 12*x**2 - 40000), (10169, x**4 + 4*x**3 - 111*x**2 - 230*x - 202616), (10177, x**4 - 124*x**2 - 36864), (10337, x**4 - 316*x**2 - 16384), (10369, x**4 - 252*x**2 - 25600), (10433, x**4 + 4*x**3 - 91*x**2 - 190*x - 352), (10513, x**4 + 4*x**3 - 651*x**2 - 1310*x - 105632)])
 
 def random_point_on_A0(K):
     p = K.prime()
@@ -320,9 +343,24 @@ class Cocycle(SageObject):
             ans = {ky : f.change_ring(psi) for ky, f in ans.items()}        
         return ans, D
     
-    # def __getitem__(self, rs):
-    #     return self.get_item(*rs, level=None)
-
+    def evaluate(self, r, s, tau, prec):
+        # Write r->s as sum g0 -> goo using Manin trick
+        # phigamma = lambda M : gamma * M * ~gamma.apply_map(lambda x : F(x).conjugate())
+        F = self.F
+        # Div = Divisors(MatrixSpace(F,2,2))
+        # D = Div([])
+        # ans = {ky : 1 for ky in self._keylist}
+        ans = 1
+        L = tau[0].parent()
+        for h, exponent, gi in self.manin_trick(r,s):
+            hinv = h.adjugate()
+            hinv_conj = hinv.apply_map(lambda x : x.conjugate())
+            hinv = hinv.apply_morphism(self.phi).change_ring(L)
+            hinv_conj = hinv_conj.apply_morphism(self.phi).change_ring(L)
+            hinv_tau = [act_flt(hinv, tau[0]), act_flt(hinv_conj, tau[1])]
+            ans *= (self.eval_L0(gi, hinv_tau) * self.eval_PS(gi, hinv_tau, prec))**ZZ(exponent)
+        return ans
+    
     # Evaluate the power series part of the cocycle at h gi oo -> h gi 0
     def _eval_translate_inf_zero(self, h, gi, level=None, lift=False):
         S = self.Ruv
@@ -374,7 +412,6 @@ class Cocycle(SageObject):
         return ans
 
     def check_cocycle_property_pseries(self, level=2, gamma=None):
-        global J
         F = self.F        
         prec = self.Fp.precision_cap()
         if gamma is None:
@@ -393,14 +430,14 @@ class Cocycle(SageObject):
                 tau2 = random_point_on_A0(self.Fp)
                 assert tau1 != tau2
                 J = LHS
-                A1 *= Eval(tau1, prec, J0 = J)
+                A1 *= self.eval_PS(tau1, prec)
                 # print(f'{A1 = }')
-                A2 *= Eval(tau2, prec, J0 = J)
+                A2 *= self.eval_PS(tau2, prec)
                 # print(f'{A2 = }')
                 J = RHS
-                B1 *= Eval(tau1, prec, J0 = J)
+                B1 *= self.eval_PS(tau1, prec)
                 # print(f'{B1 = }')
-                B2 *= Eval(tau2, prec, J0 = J)
+                B2 *= self.eval_PS(tau2, prec)
                 # print(f'{B2 = }')
             print(f'Quotient: {(A1 / B1) / (A2 / B2)}')
 
@@ -487,6 +524,37 @@ class Cocycle(SageObject):
                         input_list[outky].append((inky, s1, s2, sgn))
         self.G.input_list = input_list
         return input_list
+
+    def eval_L0(self, gi, tau):
+        vv = vector([-1, tau[0]])
+        ww = vector([tau[1], 1])
+        KK = vv.parent().base_ring()
+        return prod((vv * P.apply_morphism(self.phi).apply_map(lambda o : KK(o)) * ww)**ZZ(n) for P, n in self.L0[gi])
+
+
+    def eval_PS(self, gi, tau, prec):
+        t0, t1 = tau
+        p = t0.parent().prime()
+        ans = 1
+        x0s = {i : [1] for i in range(p+1)}
+        x1s = {i : [1] for i in range(p+1)}
+        for i in range(p+1):
+            x0 = t0 if i == p else 1/(t0 - i)
+            x1 = t1 if i == p else 1/(t1 - i)
+            assert x0 == 0 or x0.valuation() >= 0
+            assert x1 == 0 or x1.valuation() >= 0
+            for _ in range(prec+1):
+                x0s[i].append(x0 * x0s[i][-1])
+                x1s[i].append(x1 * x1s[i][-1])
+        for i0 in range(p+1):
+            for j0 in range(p+1):
+                ky = (gi, i0, j0)
+                f = self.data[ky]
+                x00 = x0s[i0]
+                x11 = x1s[j0]
+                ans *= sum(sum(o * x00[j] for o, j in zip(a.coefficients(), a.exponents()) if j < prec) * x11[i] \
+                    for a, i in zip(f.coefficients(), f.exponents()) if i < prec)
+        return ans
 
     def level1(self, V):
         global ncpus
@@ -657,8 +725,11 @@ class Cocycle(SageObject):
             alpha = get_alpha(D)[1]
         except KeyError:
             raise ValueError(f'No bigRM cycle computed for discriminant {D}')
-        A, tau0, tau1 = compute_gamma_tau_ATR(self.phi, alpha)
-        E = tau_ATR_field(alpha)
+        try:
+            A, tau0, tau1 = compute_gamma_tau_ATR(self.phi, alpha)
+            E = tau_ATR_field(alpha)
+        except IndexError:
+            raise ValueError(f'No bigRM cycle computed for discriminant {D} (IndexError...)')
         return A, [tau0, tau1], E.class_number()
 
 
@@ -960,38 +1031,7 @@ def fixed_point(g, phi):
     L = Qq(p**2, Kp.precision_cap(),names='b')
     return solve_quadratic(f.change_ring(phi).change_ring(L), L, return_all=True)
 
-def Eval0(L0, tau):
-    global J
-    vv = vector([-1, tau[0]])
-    ww = vector([tau[1], 1])
-    KK = vv.parent().base_ring()
-    return prod((vv * num.apply_morphism(J.phi).apply_map(lambda o : KK(o)) * ww)**ZZ(exponent) for num, exponent in L0)
 
-
-def Eval(tau, prec, gi=None, J0 = None):
-    global J, Jval
-    t0, t1 = tau
-    p = t0.parent().prime()
-    ans = 1
-    x0s = {i : [1] for i in range(p+1)}
-    x1s = {i : [1] for i in range(p+1)}
-    for i in range(p+1):
-        x0 = t0 if i == p else 1/(t0 - i)
-        x1 = t1 if i == p else 1/(t1 - i)
-        assert x0 == 0 or x0.valuation() >= 0
-        assert x1 == 0 or x1.valuation() >= 0
-        for _ in range(prec+1):
-            x0s[i].append(x0 * x0s[i][-1])
-            x1s[i].append(x1 * x1s[i][-1])
-    for i0 in range(p+1):
-        for j0 in range(p+1):
-            ky = (i0, j0) if gi is None else (gi, i0, j0)
-            f = Jval[ky] if J0 is None else J0[ky]
-            x00 = x0s[i0]
-            x11 = x1s[j0]
-            ans *= sum(sum(o * x00[j] for o, j in zip(a.coefficients(), a.exponents()) if j < prec) * x11[i] \
-                for a, i in zip(f.coefficients(), f.exponents()) if i < prec)
-    return ans
 
 
 def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
@@ -1012,10 +1052,7 @@ def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     if any(t.trace() == 2 * t for t in tau0):
         raise ValueError(f'Tuple {(D, alpha) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
 
-
-    Jval, J0 = J.get_item(oo, A[0,0]/A[1,0], lift=True)
-    res1 = Eval(tau0, prec, J0 = Jval)
-    res0 = Eval0(J0, tau0)
+    ans = J.evaluate(oo, A[0,0]/A[1,0], tau0, prec)
     # if parallelize:
     #     res1 = 1
     #     with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
@@ -1025,7 +1062,6 @@ def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     #             res1 *= fut.result()**sgn
     # else:
     #     res1 = prod(Eval(act_flt(m.apply_morphism(phi).adjugate(), tau0), prec)**sgn for m, sgn in mlist)
-    ans = res0 * res1
     ans = ans.add_bigoh(prec + ans.valuation())
     if return_class_number:
         return ans, hE
@@ -1311,14 +1347,6 @@ def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
         D, n = D
     else:
         n = 1
-    # w = F.elements_of_norm(p)[0]
-    # Fp = Qp(p,2*M, type='floating-point')
-    # Rp = Zmod(p**M)
-    # phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
-    # if phi(w).valuation() == 0:
-    #     phi = F.hom([F.gen().minpoly().roots(Fp)[1][0]],check=False)
-    # Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
-    # map_poly = Ruv.flattening_morphism().inverse()
     J = load(fname)
     Jtau, hE = RMCEval(D, cycle_type, M, n, return_class_number=True)
     if __name__ == '__main__':
@@ -1369,52 +1397,6 @@ def functional(p, N = 20, MFs = None):
         ans_expanded.append(vexp)
         W = L.submodule(ans)
     return [label_from_functional(o) for o in ans_expanded]
-
-def functional_v2(p, N = 20):
-    # We only consider d with are not a norm from Z[i]
-    sum_of_squares = lambda n : \
-        all(e % 2 == 0 for p, e in ZZ(n).factor() if p % 4 == 3)       
-    valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
-
-    MM = []
-    MFs = ModularForms(4*p).cuspidal_subspace().gens()
-    for g0 in MFs:
-        g = list(g0.q_expansion(N+1))
-        l = lcm([QQ(o).denominator() for o in g])
-        MM.append([l * o for o in g])
-    E = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
-    A = Matrix([[E(o) for o in valid_ds]] + [[ZZ(g[o]) for o in valid_ds] for g in MM])
-    # print(A)
-    # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
-    # the first position of the vector in the kernel corresponds to a_1, and so on
-    L = IntegralLattice(ZZ(len(valid_ds))).sublattice(A.right_kernel().basis())
-    length_cap = 8
-    all_vectors = sum(L.short_vectors(length_cap),[])
-    ans = []
-    ans_expanded = []
-    W = L.submodule(ans)
-    i = 0
-    while W.rank() < L.rank():
-        # print(W.rank(),L.rank())
-        try:
-            while L.submodule(ans + [all_vectors[i]]).rank() == W.rank():
-                i += 1
-        except IndexError:
-            length_cap *= QQ(3) / 2
-            length_cap = ZZ(length_cap.ceil())
-            all_vectors = sum(L.short_vectors(length_cap),[])
-        try:
-            v = all_vectors[i]
-        except IndexError:
-            continue
-        #print(f'Adding {v = }')
-        ans.append(v)
-        vexp = [0 for _ in range(1,N)]
-        for val, idx in zip(v, valid_ds):
-            vexp[idx-1] = val
-        ans_expanded.append(vexp)
-        W = L.submodule(ans)
-    return [label_from_functional(o) for o in ans_expanded]        
 
 # Act on power series
 def act_pseries(cocycle, h, Phi, level=None, lift=False):
@@ -1494,15 +1476,15 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
     fwrite(f'Doing cocycle {fname}...', logfile)
     p, M = get_p_prec(fname)
 
-    w = F.elements_of_norm(p)[0]
-    Fp = Qp(p,2*M, type='floating-point')
-    Rp = Zmod(p**M)
-    phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
-    if phi(w).valuation() == 0:
-        phi = F.hom([F.gen().minpoly().roots(Fp)[1][0]],check=False)
-    Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
-    inv_map_poly = Ruv.flattening_morphism()
-    map_poly = inv_map_poly.inverse()
+    # w = F.elements_of_norm(p)[0]
+    # Fp = Qp(p,2*M, type='floating-point')
+    # Rp = Zmod(p**M)
+    # phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
+    # if phi(w).valuation() == 0:
+    #     phi = F.hom([F.gen().minpoly().roots(Fp)[1][0]],check=False)
+    # Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
+    # inv_map_poly = Ruv.flattening_morphism()
+    # map_poly = inv_map_poly.inverse()
     # load('orthogonal.sage')
     J = load(fname)
     label = get_label(fname)
