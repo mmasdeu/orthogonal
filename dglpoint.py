@@ -500,11 +500,12 @@ class Cocycle(SageObject):
         z2 = S.gen()
         input_list = {(h,i,j) : list() for h in self.G.reduced_rep_list for i in range(self.p+1) for j in range(self.p+1)}
         cnt = 0
-        for gi in self.G.reduced_rep_list:        
-            apply_single_dict = {}
-            MS = self.calculate_Tp_matrices(gi)
-            for m, sgn, t in MS:
-                update_progress(float(cnt+1)/(len(self.G.reduced_rep_list) * len(MS)))
+        MS = [(gi, self.calculate_Tp_matrices(gi)) for gi in self.G.reduced_rep_list]
+        num_matrices = sum(len(ms) for g, ms in MS)
+        apply_single_dict = {}        
+        for gi, ms in MS:
+            for m, sgn, t in ms:
+                update_progress(float(cnt+1)/num_matrices, msg="InitInput")
                 cnt += 1                
                 mconj = m.apply_map(lambda x : x.trace() - x)
                 A = m.apply_morphism(self.phi)
