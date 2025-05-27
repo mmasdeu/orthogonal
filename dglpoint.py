@@ -1,7 +1,6 @@
 #/usr/bin/python
 # -*- coding: utf-8 -*-
 # File: dglpoint.py
-from sqlalchemy import False_
 from util import *
 from fire import Fire
 from stopit import ThreadingTimeout
@@ -499,12 +498,14 @@ class Cocycle(SageObject):
         R = S.base_ring()
         z1 = R.gen()
         z2 = S.gen()
-        input_list = {(h,i,j) : list() for h in self.G.reduced_rep_list for i in range(self.p+1) for j in range(self.p+1)}        
+        input_list = {(h,i,j) : list() for h in self.G.reduced_rep_list for i in range(self.p+1) for j in range(self.p+1)}
+        cnt = 0
         for gi in self.G.reduced_rep_list:        
             apply_single_dict = {}
             MS = self.calculate_Tp_matrices(gi)
-            for cnt, (m, sgn, t) in enumerate(MS):
-                update_progress(float(cnt+1)/len(MS))
+            for m, sgn, t in MS:
+                update_progress(float(cnt+1)/(len(self.G.reduced_rep_list) * len(MS)))
+                cnt += 1                
                 mconj = m.apply_map(lambda x : x.trace() - x)
                 A = m.apply_morphism(self.phi)
                 Aconj = mconj.apply_morphism(self.phi)
