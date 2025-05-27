@@ -640,7 +640,6 @@ class Cocycle(SageObject):
         res = {}
         times = vector([0, 0, 0])
         if parallelize:
-            assert 0
             with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
                 # Iteration
                 future_dict = {executor.submit(Transform, outky) : outky for outky in self.G.input_list}
@@ -650,6 +649,7 @@ class Cocycle(SageObject):
                     times += vector([t1p, t2p, t3p])
                     res[outky] = ans
         else:
+            assert 0
             for outky in self.G.input_list:
                 res[outky], (t1p, t2p, t3p) = Transform(outky)
                 times += vector([t1p, t2p, t3p])
@@ -732,6 +732,9 @@ class Cocycle(SageObject):
             raise ValueError(f'No bigRM cycle computed for discriminant {D} (IndexError...)')
         return A, [tau0, tau1], E.class_number()
 
+def multiply_one_dict(x,y):
+    return {ky : x[ky] * y[ky] for ky in x}
+
 
 def multiply_dicts(dict_list, parallelize=True, ncpus=4):
     r'''
@@ -741,7 +744,7 @@ def multiply_dicts(dict_list, parallelize=True, ncpus=4):
     if parallelize:
         with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
             while len(res) > 1:
-                future_dict = {executor.submit(lambda x, y: {ky : x[ky] * y[ky] for ky in x}, res[i], res[i+1]) : i for i in range(0,len(res)-1, 2) }
+                future_dict = {executor.submit(multiply_one_dict, res[i], res[i+1]) : i for i in range(0,len(res)-1, 2) }
                 res = [] if len(res) % 2 == 0 else [res[-1]]
                 for fut in futures.as_completed(future_dict):
                     res.append(fut.result())
@@ -1289,7 +1292,7 @@ def cocycle(q : int, label : str, M : int, fname=None):
     p = ZZ(q)
     print(f'{p = }')
     print(f'{label = }')
-    parallelize = False
+    parallelize = True
     w = F.elements_of_norm(p)[0]
     G = DGLGroup(F, w, 2, parallelize=parallelize)
     if fname is None:
