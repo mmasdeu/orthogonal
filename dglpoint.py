@@ -23,7 +23,6 @@ from sage.rings.padics.precision_error import PrecisionError
 from cysignals.signals import SignalError
 from builtins import ModuleNotFoundError
 
-global G
 
 x = QQ['x'].gen()
 valid_ATR_fields = dict([(41, x**4 + 4*x**3 + x**2 - 6*x - 8),
@@ -199,7 +198,6 @@ class DGLGroup(SageObject):
 
 class Cocycle(SageObject):
     def __init__(self, functional, prec, initialize=True):
-        global G
         self.prec = prec
         self.p = G.p
         self.G = G
@@ -560,7 +558,6 @@ class Cocycle(SageObject):
         return ans
 
     def level1(self, V):
-        global ncpus
         p = self.p
         try:
             ncpus = ncpus
@@ -632,7 +629,6 @@ class Cocycle(SageObject):
         return j1, j2, ans
 
     def next(self, **kwargs):
-        global gF
         gF = self.datalist[-1]
         timing = kwargs.get('timing', False)
         p = kwargs.get('p', None)
@@ -663,7 +659,6 @@ class Cocycle(SageObject):
             return self
 
     def RMC(self, **kwargs):
-        global ncpus, G
         coset_list = kwargs.get('coset_list', None)
         parallelize = kwargs.get('parallelize', True)
         if coset_list is None:
@@ -1000,7 +995,6 @@ def ApplySingle(A, i, z, M, check=True):
 
 
 def Transform(outky):
-    global gF, G
     res = 1
     resinv = 1
     t1 = 0
@@ -1042,7 +1036,6 @@ def fixed_point(g, phi):
 
 
 def RMCEval(J, D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
-    global Jval, ncpus
     try:
         ncpus = ncpus
     except NameError:
@@ -1291,14 +1284,11 @@ def find_value_one(maxD, cycle_type='smallCM'):
     return stats
 
 
-def cocycle(q : int, label : str, M : int, fname=None):
-    # global L0, p, J, F, parallelize, phi, Fp, Ruv, Rp, map_poly, input_list
-    global J, G
+def cocycle(q : int, label : str, M : int, fname=None, parallelize=True):
     F = QuadraticField(-1, names='r')
     p = ZZ(q)
     print(f'{p = }')
     print(f'{label = }')
-    parallelize = True
     w = F.elements_of_norm(p)[0]
     G = DGLGroup(F, w, 2, parallelize=parallelize)
     if fname is None:
@@ -1320,7 +1310,6 @@ def cocycle(q : int, label : str, M : int, fname=None):
     return # F2, F1, G
 
 def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, timeout=20, outfile=None, logfile=None, max_degree=16):
-    global L0, J, p, F, parallelize, phi, Fp, Ruv, Rp, map_poly
     Jtau, hE = evaluate(q, label, D, cycle_type, M, fname)
     if isinstance(D,tuple):
         D, n = D
@@ -1345,7 +1334,6 @@ def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, ti
         return Jtau, ans
 
 def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
-    global L0, J, p, parallelize, phi, Fp, Ruv, Rp, map_poly
     p = q
 
     if fname is None:
@@ -1469,7 +1457,6 @@ def get_label(f):
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
 
 def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log'):
-    global L0, J, M, F, p, Rp, phi
     logfile = outdir + '/' + log
     if typ is None or typ == 'all':
         cycle_types = ['smallCM', 'smallRM', 'bigRM']
