@@ -716,12 +716,15 @@ def recognize_DGL_lindep(J, L, prime_list, Cp = None, units=None, outfile=None, 
         for L0, _, _ in L.subfields():
             if L0.degree() <= degree_bound:
                 try:
-                    ans = recognize_DGL_lindep(J, L0, prime_list, Cp=Cp, units=units, outfile=outfile, **kwargs)
+                    new_ans = recognize_DGL_lindep(J, L0, prime_list, Cp=Cp, units=units, outfile=outfile, **kwargs)
+                    if new_ans is not None and ans is None:
+                        ans = new_ans
                 except ValueError:
                     pass
-                if ans is not None:
-                    return ans
-        return None
+                if new_ans is not None:
+                    print(new_ans)
+                    # return ans
+        return ans
     K = J.parent()
     p = K.prime()
     Jval = J.valuation()
