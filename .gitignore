@@ -1,3 +1,5 @@
 *.sobj
 outfiles*/*
 __pycache__/*
+*.sage.py
+*~
