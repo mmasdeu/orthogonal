@@ -15,7 +15,6 @@ ncpus = 4
 parallelize = True
 
 from dglpoint import *
-# load('orthogonal.sage')
 # cocycle_fnames = sorted(glob('L0Jtuple*.sobj'))
 
 def get_p_prec(f):
@@ -31,7 +30,7 @@ def get_label(f):
 # This command can run all of it
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
 
-def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log'):
+def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log', prime_bound=600):
     global L0, J, M, F, p, Rp, phi
     logfile = outdir + '/' + log
     if typ is None or typ == 'all':
@@ -48,15 +47,15 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
     fwrite(f'Doing cocycle {fname}...', logfile)
     p, M = get_p_prec(fname)
 
-    w = F.elements_of_norm(p)[0]
-    Fp = Qp(p,2*M, type='floating-point')
-    Rp = Zmod(p**M)
-    phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
-    if phi(w).valuation() == 0:
-        phi = F.hom([F.gen().minpoly().roots(Fp)[1][0]],check=False)
-    Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
-    inv_map_poly = Ruv.flattening_morphism()
-    map_poly = inv_map_poly.inverse()
+    # w = F.elements_of_norm(p)[0]
+    # Fp = Qp(p,2*M, type='floating-point')
+    # Rp = Zmod(p**M)
+    #phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
+    # if phi(w).valuation() == 0:
+    #    phi = F.hom([F.gen().minpoly().roots(Fp)[1][0]],check=False)
+    # Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
+    # inv_map_poly = Ruv.flattening_morphism()
+    # map_poly = inv_map_poly.inverse()
     # load('orthogonal.sage')
     J = load(fname)
     label = get_label(fname)
@@ -68,10 +67,11 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
                 try:
                     try:
                         fwrite(f'Computing {fname} {D},{n},{cycle_type}...', logfile)
-                        Jtau0, hE = RMCEval(D, cycle_type, M, n=n, return_class_number=True)
+                        Jtau0, hE = RMCEval(J, D, cycle_type, M, n=n, return_class_number=True)
                         Cp = Jtau0.parent()
                     except (ValueError, NotImplementedError, TypeError, RuntimeError, PrecisionError, SignalError, KeyboardInterrupt, ModuleNotFoundError) as e:
-                        fwrite(f'Skipping {fname} {D},{n},{cycle_type}...({str(e)})', logfile)
+                        if 'no elements of norm -1' not in str(e):
+                            fwrite(f'Skipping {fname} {D},{n},{cycle_type}...({str(e)})', logfile)
                         continue
                     fwrite(f'Computed Jtau for {fname} {D} {n} {cycle_type}.', logfile)
                     if Jtau0 == 1:
@@ -81,7 +81,7 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
                         success = False
                         try:
                             with stopit.ThreadingTimeout(120) as to_ctx_mgr:
-                                H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z')
+                                H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z', prime_bound=prime_bound)
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
                                 raise ExpatError
                         except ExpatError:
@@ -109,7 +109,7 @@ def evaluate_cocycle(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', lo
                                         msg += ' warning: ' + str([q for q in support if q not in prime_list])
                                 fwrite(msg, outfile)
                                 break
-                        if not success and prime_list is not None and ('big' not in typ or H.degree() <= 16):
+                        if not success and prime_list is not None and ('big' not in cycle_type or H.degree() <= 16):
                             with stopit.ThreadingTimeout(3600) as to_ctx_mgr:
                                 ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, degree_bound=8, algorithm='pari')
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:

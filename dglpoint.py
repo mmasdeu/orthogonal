@@ -10,6 +10,7 @@ from multiprocessing import cpu_count
 from concurrent import futures
 from sage.misc.timing import cputime
 from collections import defaultdict
+from sage.all import srange
 from sage.all import *
 from util import *
 from darmonpoints.divisors import *
@@ -22,7 +23,6 @@ from sage.rings.padics.precision_error import PrecisionError
 from cysignals.signals import SignalError
 from builtins import ModuleNotFoundError
 
-global G
 
 x = QQ['x'].gen()
 valid_ATR_fields = dict([(41, x**4 + 4*x**3 + x**2 - 6*x - 8),
@@ -198,7 +198,6 @@ class DGLGroup(SageObject):
 
 class Cocycle(SageObject):
     def __init__(self, functional, prec, initialize=True):
-        global G
         self.prec = prec
         self.p = G.p
         self.G = G
@@ -243,14 +242,14 @@ class Cocycle(SageObject):
         assert all(d == 0 for d in degrees), degrees
         if check:
             for g in reps:
-                r, s = act_flt(g, oo), act_flt(g, self.F(0))
+                r, s = act_flt(g, Infinity), act_flt(g, self.F(0))
                 for M, sgn in L0[g]:
                     alphaconj, mb, c, _ = M.list()
                     alpha = alphaconj.conjugate()
                     b = - mb
                     sqradius = (alpha.norm() - b*c) / (c*c)
                     center = alphaconj / c
-                    qf = lambda x : 1 if x == oo else (x-center).norm() - sqradius
+                    qf = lambda x : 1 if x == Infinity else (x-center).norm() - sqradius
                     assert qf(r) * qf(s) < 0
         self.L0 = L0
         self.L1 = L1
@@ -273,7 +272,7 @@ class Cocycle(SageObject):
         except TypeError:
             ynum = F(1)
             yden = F(0)
-            y = oo
+            y = Infinity
         try:
             x = F(x)
             xnum = F(x.numerator())
@@ -281,7 +280,7 @@ class Cocycle(SageObject):
         except TypeError:
             xnum = F(1)
             xden = F(0)
-            x = oo
+            x = Infinity
         ylist = matrices_for_unimodular_path(ynum, yden) # {oo -> y}
         xlist = matrices_for_unimodular_path(xnum, xden) # {oo -> x}
         ans = []
@@ -310,11 +309,11 @@ class Cocycle(SageObject):
                 a, b, c, d = m.list()
                 # Store in res the contribution {a/c -> b/d}
                 if c == 0:
-                    res[oo] -= sgn
+                    res[Infinity] -= sgn
                 else:
                     res[a / c] -= sgn
                 if d == 0:
-                    res[oo] += sgn
+                    res[Infinity] += sgn
                 else:
                     res[b / d] += sgn
             assert all(o == 0 for o in res.values()), f'Error in Manin trick: {x = }, {y = } {res = }\n{ans = }'
@@ -422,7 +421,7 @@ class Cocycle(SageObject):
         for gi in self.G.reduced_rep_list:
             for level0 in range(2,level+2, 2):                
                 LHS = self._eval_translate_inf_zero(gamma, gi, level=level0, lift=True)
-                r = act_flt(gamma * gi, oo)
+                r = act_flt(gamma * gi, Infinity)
                 s = act_flt(gamma * gi, 0)
                 RHS = self.get_item(r, s, level0, lift=True)
                 tau1 = random_point_on_A0(self.Fp)
@@ -447,7 +446,7 @@ class Cocycle(SageObject):
             gamma = matrix(F,2,2,[-1,-1,2,1])
         ans = {}
         for gi in self.G.reduced_rep_list:
-            r = act_flt(gamma * gi, oo)
+            r = act_flt(gamma * gi, Infinity)
             s = act_flt(gamma * gi, 0)
             Div = Divisors(MatrixSpace(self.F,2,2))
             J = self.L0
@@ -478,9 +477,9 @@ class Cocycle(SageObject):
             m = ginv * m0
             m.set_immutable()
             # x = m0^{-1} * g · oo
-            x = -m[1,1] / m[1,0] if m[1,0] != 0 else oo
+            x = -m[1,1] / m[1,0] if m[1,0] != 0 else Infinity
             # y = m0^{-1} * g · 0
-            y = -m[0,1] / m[0,0] if m[0,0] != 0 else oo
+            y = -m[0,1] / m[0,0] if m[0,0] != 0 else Infinity
             mlist = self.manin_trick(x, y)
             if any((m * h).apply_map(lambda x : x.trace() - x).apply_morphism(self.phi).determinant().valuation() != 0 for h,_,_ in mlist):
                 raise RuntimeError('Problem with embedding, try the other one.')
@@ -505,7 +504,7 @@ class Cocycle(SageObject):
         apply_single_dict = {}        
         for gi, ms in MS:
             for m, sgn, t in ms:
-                update_progress(float(cnt+1)/num_matrices, msg="InitInput")
+                update_progress(float(cnt+1)/num_matrices, msg="InitInput")        
                 cnt += 1                
                 mconj = m.apply_map(lambda x : x.trace() - x)
                 A = m.apply_morphism(self.phi)
@@ -559,7 +558,6 @@ class Cocycle(SageObject):
         return ans
 
     def level1(self, V):
-        global ncpus
         p = self.p
         try:
             ncpus = ncpus
@@ -631,7 +629,6 @@ class Cocycle(SageObject):
         return j1, j2, ans
 
     def next(self, **kwargs):
-        global gF
         gF = self.datalist[-1]
         timing = kwargs.get('timing', False)
         p = kwargs.get('p', None)
@@ -662,7 +659,6 @@ class Cocycle(SageObject):
             return self
 
     def RMC(self, **kwargs):
-        global ncpus, G
         coset_list = kwargs.get('coset_list', None)
         parallelize = kwargs.get('parallelize', True)
         if coset_list is None:
@@ -712,21 +708,20 @@ class Cocycle(SageObject):
         hE = QuadraticField(D,'w').class_number()
         return A, [t0, t0], hE # not a typo!
 
-    def bigRMcycle_old(self, D, alpha=None, n=1):
-        if alpha is None:
-            alpha = ATR_alpha(D, n)
+    def bigRMcycle(self, D, alpha=None, n=1, version='new'):
+        if version not in ['old', 'new']:
+            raise ValueError('version must be either "old" or "new"')
+        if version == 'old':
+            if alpha is None:
+                alpha = ATR_alpha(D, n)
+            else:
+                assert n == 1, 'n would not be used'
         else:
-            assert n == 1, 'n would not be used'
-        A, tau0, tau1 = compute_gamma_tau_ATR(self.phi, alpha)
-        E = tau_ATR_field(alpha)
-        return A, [tau0, tau1], E.class_number()
-
-    def bigRMcycle(self, D, alpha=None, n=1):
-        assert alpha is None and n == 1
-        try:
-            alpha = get_alpha(D)[1]
-        except KeyError:
-            raise ValueError(f'No bigRM cycle computed for discriminant {D}')
+            assert alpha is None and n == 1
+            try:
+                alpha = get_alpha(D)
+            except KeyError:
+                raise ValueError(f'No bigRM cycle computed for discriminant {D}')
         try:
             A, tau0, tau1 = compute_gamma_tau_ATR(self.phi, alpha)
             E = tau_ATR_field(alpha)
@@ -756,7 +751,7 @@ def multiply_dicts(dict_list, parallelize=True, ncpus=4):
         ans = {ky : prod(r[ky] for r in res) for ky in res[0] }
     return ans
 
-def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=600):
+def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=600, version='new'):
     r'''
     If smallRM:
     - If char == triv: return F
@@ -774,8 +769,10 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
     if typ == 'smallCM':
         D = -D
     if typ == 'bigRM':
-        # alpha = ATR_alpha(D,n)
-        alpha = get_alpha(D)[1]
+        if version == 'new':
+            alpha = get_alpha(D)[1]
+        else:
+            alpha = ATR_alpha(D, n)
         L0 = alpha.parent()
         L1 = tau_ATR_field(alpha)
         L = L1.absolute_field(names='t')
@@ -913,7 +910,7 @@ def all_elements_of_norm(F, n):
 def vectors_in_lattice(F, p, n, g=1):
     g = MatrixSpace(F,2,2)(g)
     res = []
-    r, s = act_flt(g, oo), act_flt(g, F(0))
+    r, s = act_flt(g, Infinity), act_flt(g, F(0))
     for mac in range(1,n+1):
         RHS = n - mac
         betas = all_elements_of_norm(F, RHS)
@@ -941,7 +938,7 @@ def vectors_in_lattice(F, p, n, g=1):
                 sqradius = (alpha.norm() + mb*c) / (c*c)
                 center = alpha / c
                 center = center.conjugate()
-                qf = lambda x : 1 if x == oo else (x-center).norm() - sqradius                    
+                qf = lambda x : 1 if x == Infinity else (x-center).norm() - sqradius                    
                 assert qf(r) * qf(s) < 0
                 res.extend([(new_mat, sgn)])
     return res
@@ -999,7 +996,6 @@ def ApplySingle(A, i, z, M, check=True):
 
 
 def Transform(outky):
-    global gF, G
     res = 1
     resinv = 1
     t1 = 0
@@ -1040,12 +1036,12 @@ def fixed_point(g, phi):
 
 
 
-def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
-    global F, L0, J, Jval, ncpus
+def RMCEval(J, D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     try:
         ncpus = ncpus
     except NameError:
         ncpus = cpu_count()
+    F = J.F
     if cycle_type == 'smallCM':
         A, tau0, hE = J.smallCMcycle(D)
     elif cycle_type == 'smallRM':
@@ -1058,7 +1054,7 @@ def RMCEval(D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     if any(t.trace() == 2 * t for t in tau0):
         raise ValueError(f'Tuple {(D, alpha) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
 
-    ans = J.evaluate(oo, A[0,0]/A[1,0], tau0, prec)
+    ans = J.evaluate(Infinity, A[0,0]/A[1,0], tau0, prec)
     # if parallelize:
     #     res1 = 1
     #     with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
@@ -1154,6 +1150,7 @@ def tau_ATR_field(alpha, names='w'):
 
 # it accepts a real quadratic field FF and an element alpha in FF of norm -1; then E = FF(sqrt(alpha) is the ATR extension and K = Q(i) is contained in the galois closure of E
 def compute_gamma_tau_ATR(phi, alpha):
+    F = phi.domain()
     Kp = phi.codomain()
     p = Kp.prime()
     # FF = alpha.parent()
@@ -1288,14 +1285,11 @@ def find_value_one(maxD, cycle_type='smallCM'):
     return stats
 
 
-def cocycle(q : int, label : str, M : int, fname=None):
-    # global L0, p, J, F, parallelize, phi, Fp, Ruv, Rp, map_poly, input_list
-    global J, G
+def cocycle(q : int, label : str, M : int, fname=None, parallelize=True):
     F = QuadraticField(-1, names='r')
     p = ZZ(q)
     print(f'{p = }')
     print(f'{label = }')
-    parallelize = True
     w = F.elements_of_norm(p)[0]
     G = DGLGroup(F, w, 2, parallelize=parallelize)
     if fname is None:
@@ -1317,7 +1311,6 @@ def cocycle(q : int, label : str, M : int, fname=None):
     return # F2, F1, G
 
 def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, timeout=20, outfile=None, logfile=None, max_degree=16):
-    global L0, J, p, F, parallelize, phi, Fp, Ruv, Rp, map_poly
     Jtau, hE = evaluate(q, label, D, cycle_type, M, fname)
     if isinstance(D,tuple):
         D, n = D
@@ -1342,7 +1335,6 @@ def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, ti
         return Jtau, ans
 
 def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
-    global L0, J, p, parallelize, phi, Fp, Ruv, Rp, map_poly
     p = q
 
     if fname is None:
@@ -1466,7 +1458,6 @@ def get_label(f):
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
 
 def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log'):
-    global L0, J, M, F, p, Rp, phi
     logfile = outdir + '/' + log
     if typ is None or typ == 'all':
         cycle_types = ['smallCM', 'smallRM', 'bigRM']
