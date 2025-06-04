@@ -4,25 +4,25 @@
 from util import *
 from fire import Fire
 from stopit import ThreadingTimeout
-from sage.all import QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, BinaryQF_reduced_representatives
+from sage.all import SageObject, srange, QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, MatrixSpace
 from sage.rings.padics.precision_error import PrecisionError
 from multiprocessing import cpu_count
 from concurrent import futures
 from sage.misc.timing import cputime
 from collections import defaultdict
-from sage.all import srange
-from sage.all import *
 from util import *
-from darmonpoints.divisors import *
+from darmonpoints.divisors import Divisors
 
 from time import sleep
 from fire import Fire
 import stopit
 
+from xml.parsers.expat import ExpatError
 from sage.rings.padics.precision_error import PrecisionError
 from cysignals.signals import SignalError
 from builtins import ModuleNotFoundError
 
+G = None
 
 x = QQ['x'].gen()
 valid_ATR_fields = dict([(41, x**4 + 4*x**3 + x**2 - 6*x - 8),
@@ -49,6 +49,17 @@ valid_ATR_fields = dict([(41, x**4 + 4*x**3 + x**2 - 6*x - 8),
                          (1889, x**4 + 4*x**3 - 11*x**2 - 30*x - 416),
                          (1993, x**4 - 172*x**2 - 576),
                          (2113, x**4 + 4*x**3 - 291*x**2 - 590*x - 21032), (2129, x**4 - 92*x**2 - 6400), (2273, x**4 + 4*x**3 + 53*x**2 + 98*x + 32), (2377, x**4 + 4*x**3 - 183*x**2 - 374*x - 39392), (2521, x**4 - 140*x**2 - 5184), (2593, x**4 + 4*x**3 - 147*x**2 - 302*x - 46808), (2617, x**4 + 4*x**3 + 465*x**2 + 922*x + 136), (2657, x**4 + 4*x**3 - 435*x**2 - 878*x - 5624), (2689, x**4 + 4*x**3 - 27*x**2 - 62*x - 432), (2729, x**4 + 4*x**3 - 39*x**2 - 86*x - 54800), (2833, x**4 - 92*x**2 - 9216), (2953, x**4 + 4*x**3 - 47*x**2 - 102*x - 88), (3001, x**4 - 204*x**2 - 1600), (3089, x**4 + 4*x**3 + 501*x**2 + 994*x - 800), (3217, x**4 + 4*x**3 - 3*x**2 - 14*x - 792), (3361, x**4 - 60*x**2 - 12544), (3433, x**4 - 100*x**3 - 2684*x**2 + 369056*x + 6718464), (3593, x**4 + 4*x**3 - 47*x**2 - 102*x - 248), (3761, x**4 + 4*x**3 - 219*x**2 - 446*x - 63728), (3881, x**4 - 236*x**2 - 1600), (3929, x**4 - 140*x**2 - 10816), (4049, x**4 - 220*x**2 - 4096), (4073, x**4 + 4*x**3 - 327*x**2 - 662*x - 55088), (4177, x**4 + 4*x**3 - 75*x**2 - 158*x - 83024), (4273, x**4 + 4*x**3 - 507*x**2 - 1022*x - 21248), (4289, x**4 + 4*x**3 - 59*x**2 - 126*x - 80), (4513, x**4 - 188*x**2 - 9216), (4657, x**4 - 148*x**3 - 476*x**2 + 589472*x + 8856576), (4721, x**4 + 4*x**3 - 219*x**2 - 446*x - 83168), (4793, x**4 + 4*x**3 - 111*x**2 - 230*x - 93752), (4801, x**4 + 4*x**3 - 59*x**2 - 126*x - 208), (4817, x**4 + 4*x**3 - 363*x**2 - 734*x - 63872), (4969, x**4 + 4*x**3 - 327*x**2 - 662*x - 73232), (4993, x**4 - 244*x**3 + 13348*x**2 + 347168*x + 589824), (5233, x**4 - 28*x**2 - 20736), (5393, x**4 + 4*x**3 - 651*x**2 - 1310*x - 1952), (5641, x**4 + 4*x**3 + 81*x**2 + 154*x + 72), (5657, x**4 + 4*x**3 - 543*x**2 - 1094*x - 39752), (5801, x**4 + 4*x**3 + x**2 - 6*x - 1448), (5897, x**4 - 44*x**2 - 23104), (6073, x**4 + 4*x**3 - 71*x**2 - 150*x - 112), (6217, x**4 + 4*x**3 - 183*x**2 - 374*x - 117152), (6329, x**4 + 4*x**3 - 71*x**2 - 150*x - 176), (6353, x**4 + 4*x**3 - 651*x**2 - 1310*x - 21392), (6449, x**4 - 28*x**2 - 25600), (6473, x**4 - 164*x**3 - 2172*x**2 + 936608*x + 19784704), (6529, x**4 + 4*x**3 - 579*x**2 - 1166*x - 47240), (6689, x**4 + 4*x**3 - 11*x**2 - 30*x - 1616), (7001, x**4 - 140*x**2 - 23104), (7121, x**4 - 220*x**2 - 16384), (7193, x**4 - 260*x**3 + 12036*x**2 + 862496*x + 5914624), (7321, x**4 + 4*x**3 - 543*x**2 - 1094*x - 73448), (7369, x**4 + 4*x**3 - 759*x**2 - 1526*x - 3680), (7393, x**4 - 188*x**2 - 20736), (7417, x**4 - 76*x**2 - 28224), (7489, x**4 + 4*x**3 - 291*x**2 - 590*x - 129896), (7793, x**4 - 28*x**2 - 30976), (7841, x**4 - 316*x**2 - 6400), (8009, x**4 + 4*x**3 - 79*x**2 - 166*x - 280), (8089, x**4 - 268*x**2 - 14400), (8161, x**4 + 4*x**3 - 75*x**2 - 158*x - 480), (8209, x**4 - 220*x**2 - 20736), (8273, x**4 - 84*x**3 - 13532*x**2 + 907168*x + 58491904), (8297, x**4 + 4*x**3 + 825*x**2 + 1642*x + 496), (8329, x**4 - 300*x**2 - 10816), (8369, x**4 + 4*x**3 - 19*x**2 - 46*x - 1960), (8377, x**4 - 204*x**2 - 23104), (8521, x**4 + 4*x**3 - 759*x**2 - 1526*x - 27008), (8609, x**4 - 188*x**2 - 25600), (8681, x**4 - 364*x**2 - 1600), (9137, x**4 - 284*x**2 - 16384), (9257, x**4 - 228*x**3 + 1924*x**2 + 1558432*x + 30647296), (9377, x**4 - 316*x**2 - 12544), (9433, x**4 + 4*x**3 - 831*x**2 - 1670*x - 16712), (9473, x**4 + 4*x**3 - 867*x**2 - 1742*x - 2168), (9497, x**4 + 4*x**3 - 55*x**2 - 118*x - 1504), (9601, x**4 - 380*x**2 - 2304), (9689, x**4 - 132*x**3 - 12284*x**2 + 1408288*x + 69222400), (9697, x**4 + 4*x**3 - 75*x**2 - 158*x - 864), (9817, x**4 + 4*x**3 + 105*x**2 + 202*x + 96), (9929, x**4 + 4*x**3 - 759*x**2 - 1526*x - 55520), (10009, x**4 - 12*x**2 - 40000), (10169, x**4 + 4*x**3 - 111*x**2 - 230*x - 202616), (10177, x**4 - 124*x**2 - 36864), (10337, x**4 - 316*x**2 - 16384), (10369, x**4 - 252*x**2 - 25600), (10433, x**4 + 4*x**3 - 91*x**2 - 190*x - 352), (10513, x**4 + 4*x**3 - 651*x**2 - 1310*x - 105632)])
+
+def get_p_prec(f):
+    fsp = f.split('_')
+    p = ZZ(fsp[1])
+    M = ZZ(fsp[-1].split('.')[0])
+    return p, M
+
+def get_label(f):
+    fsp = f.split('_')
+    return fsp[2] + '_' + fsp[3]
+
 
 def random_point_on_A0(K):
     p = K.prime()
@@ -429,14 +440,10 @@ class Cocycle(SageObject):
                 assert tau1 != tau2
                 J = LHS
                 A1 *= self.eval_PS(tau1, prec)
-                # print(f'{A1 = }')
                 A2 *= self.eval_PS(tau2, prec)
-                # print(f'{A2 = }')
                 J = RHS
                 B1 *= self.eval_PS(tau1, prec)
-                # print(f'{B1 = }')
                 B2 *= self.eval_PS(tau2, prec)
-                # print(f'{B2 = }')
             print(f'Quotient: {(A1 / B1) / (A2 / B2)}')
 
 
@@ -629,6 +636,7 @@ class Cocycle(SageObject):
         return j1, j2, ans
 
     def next(self, **kwargs):
+        global gF
         gF = self.datalist[-1]
         timing = kwargs.get('timing', False)
         p = kwargs.get('p', None)
@@ -708,7 +716,7 @@ class Cocycle(SageObject):
         hE = QuadraticField(D,'w').class_number()
         return A, [t0, t0], hE # not a typo!
 
-    def bigRMcycle(self, D, alpha=None, n=1, version='new'):
+    def bigRMcycle(self, D, alpha=None, n=1, version='old'):
         if version not in ['old', 'new']:
             raise ValueError('version must be either "old" or "new"')
         if version == 'old':
@@ -996,6 +1004,7 @@ def ApplySingle(A, i, z, M, check=True):
 
 
 def Transform(outky):
+    global gF
     res = 1
     resinv = 1
     t1 = 0
@@ -1041,7 +1050,6 @@ def RMCEval(J, D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
         ncpus = ncpus
     except NameError:
         ncpus = cpu_count()
-    F = J.F
     if cycle_type == 'smallCM':
         A, tau0, hE = J.smallCMcycle(D)
     elif cycle_type == 'smallRM':
@@ -1253,39 +1261,8 @@ def compute_gamma_tau_ATR(phi, alpha):
     return gamma, iMML(tau1), iMML(tau2)
 
 
-def find_value_one(maxD, cycle_type='smallCM'):
-    stats = {'0':[], '1':[], 'oo':[], '?':[], 'err':[]}
-    for D in srange(2, maxD):
-        print(D)
-        if D.is_square():
-            continue
-        try:
-            c2 = ZZ(D / fundamental_discriminant(D))
-            c2 = c2.sqrt()
-        except TypeError:
-            continue
-        try:
-            x1 = RMCEval(D,cycle_type=cycle_type,prec=10)
-            if x1 == 1:
-                print(f'{D = } yields one')
-                stats['1'].append(D)
-            elif x1 == 0:
-                print(f'{D = } yields zero')
-                stats['0'].append(D)
-            elif x1.valuation() < 40:
-                print(f'{D = } yields infinity')
-                stats['oo'].append(D)
-            else:
-                print(f'{D = } yields {x1}')
-                stats['?'].append(D)
-        except (TypeError, ValueError, RuntimeError) as e:
-            stats['err'].append((D,str(e)))
-        except PrecisionError:
-            stats['oo'].append(D)
-    return stats
-
-
 def cocycle(q : int, label : str, M : int, fname=None, parallelize=True):
+    global G
     F = QuadraticField(-1, names='r')
     p = ZZ(q)
     print(f'{p = }')
@@ -1346,7 +1323,7 @@ def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
     else:
         n = 1
     J = load(fname)
-    Jtau, hE = RMCEval(D, cycle_type, M, n, return_class_number=True)
+    Jtau, hE = RMCEval(J, D, cycle_type, M, n, return_class_number=True)
     if __name__ == '__main__':
         print(Jtau)
     return Jtau, hE
@@ -1457,7 +1434,7 @@ def get_label(f):
 # This command can run all of it
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
 
-def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log'):
+def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log', prime_bound=600):
     logfile = outdir + '/' + log
     if typ is None or typ == 'all':
         cycle_types = ['smallCM', 'smallRM', 'bigRM']
@@ -1472,17 +1449,6 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
 
     fwrite(f'Doing cocycle {fname}...', logfile)
     p, M = get_p_prec(fname)
-
-    # w = F.elements_of_norm(p)[0]
-    # Fp = Qp(p,2*M, type='floating-point')
-    # Rp = Zmod(p**M)
-    # phi = F.hom([F.gen().minpoly().roots(Fp)[0][0]],check=False)
-    # if phi(w).valuation() == 0:
-    #     phi = F.hom([F.gen().minpoly().roots(Fp)[1][0]],check=False)
-    # Ruv = PolynomialRing(PolynomialRing(Rp,'u'),'v')
-    # inv_map_poly = Ruv.flattening_morphism()
-    # map_poly = inv_map_poly.inverse()
-    # load('orthogonal.sage')
     J = load(fname)
     label = get_label(fname)
     for D in Dvalues:
@@ -1493,10 +1459,11 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
                 try:
                     try:
                         fwrite(f'Computing {fname} {D},{n},{cycle_type}...', logfile)
-                        Jtau0, hE = RMCEval(D, cycle_type, M, n=n, return_class_number=True)
+                        Jtau0, hE = RMCEval(J, D, cycle_type, M, n=n, return_class_number=True)
                         Cp = Jtau0.parent()
                     except (ValueError, NotImplementedError, TypeError, RuntimeError, PrecisionError, SignalError, KeyboardInterrupt, ModuleNotFoundError) as e:
-                        fwrite(f'Skipping {fname} {D},{n},{cycle_type}...({str(e)})', logfile)
+                        if 'no elements of norm -1' not in str(e):
+                            fwrite(f'Skipping {fname} {D},{n},{cycle_type}...({str(e)})', logfile)
                         continue
                     fwrite(f'Computed Jtau for {fname} {D} {n} {cycle_type}.', logfile)
                     if Jtau0 == 1:
@@ -1506,7 +1473,7 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
                         success = False
                         try:
                             with stopit.ThreadingTimeout(120) as to_ctx_mgr:
-                                H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z')
+                                H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z', prime_bound=prime_bound)
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
                                 raise ExpatError
                         except ExpatError:
@@ -1534,7 +1501,7 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
                                         msg += ' warning: ' + str([q for q in support if q not in prime_list])
                                 fwrite(msg, outfile)
                                 break
-                        if not success and prime_list is not None and ('big' not in typ or H.degree() <= 16):
+                        if not success and prime_list is not None and ('big' not in cycle_type or H.degree() <= 16):
                             with stopit.ThreadingTimeout(3600) as to_ctx_mgr:
                                 ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, degree_bound=8, algorithm='pari')
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
@@ -1554,7 +1521,6 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
                     sleep(1)
                 # except Exception as e:
                 #     fwrite(f'WARNING! Unhandled exception so skipping {cycle_type = } {p = } {label = } {D = }, {n = } : {str(e)}', logfile)
-
 
 if __name__ == '__main__':
   Fire({'cocycle': cocycle,'evaluate': evaluate,'functional':functional, 'recognize':recognize,
