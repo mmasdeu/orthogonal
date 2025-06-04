@@ -746,6 +746,7 @@ def multiply_dicts(dict_list, parallelize=True, ncpus=4):
     if parallelize:
         with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
             while len(res) > 1:
+                print(len(res), 'dictionaries to multiply...')
                 future_dict = {executor.submit(multiply_one_dict, res[i], res[i+1]) : i for i in range(0,len(res)-1, 2) }
                 res = [] if len(res) % 2 == 0 else [res[-1]]
                 for fut in futures.as_completed(future_dict):
