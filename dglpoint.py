@@ -74,7 +74,11 @@ def random_point_on_A0(K):
     return a,b
 
 def get_alpha(D):
-    f = valid_ATR_fields[D]
+    try:
+        f = valid_ATR_fields[D]
+    except KeyError:
+        raise ValueError(f'No bigRM cycle computed for discriminant {D}')
+
     K = NumberField(x*x - D, names ='t')
     E = NumberField(f, names = 'gE')
     EK = E.relativize(K.embeddings(E)[0], 'gEF')
@@ -716,7 +720,7 @@ class Cocycle(SageObject):
         hE = QuadraticField(D,'w').class_number()
         return A, [t0, t0], hE # not a typo!
 
-    def bigRMcycle(self, D, alpha=None, n=1, version='old'):
+    def bigRMcycle(self, D, n=1, alpha=None, version='old'):
         if version not in ['old', 'new']:
             raise ValueError('version must be either "old" or "new"')
         if version == 'old':
@@ -726,10 +730,7 @@ class Cocycle(SageObject):
                 assert n == 1, 'n would not be used'
         else:
             assert alpha is None and n == 1
-            try:
-                alpha = get_alpha(D)
-            except KeyError:
-                raise ValueError(f'No bigRM cycle computed for discriminant {D}')
+            alpha = get_alpha(D)
         try:
             A, tau0, tau1 = compute_gamma_tau_ATR(self.phi, alpha)
             E = tau_ATR_field(alpha)
@@ -759,7 +760,7 @@ def multiply_dicts(dict_list, parallelize=True, ncpus=4):
         ans = {ky : prod(r[ky] for r in res) for ky in res[0] }
     return ans
 
-def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=600, version='new'):
+def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=600, version='old'):
     r'''
     If smallRM:
     - If char == triv: return F
@@ -778,7 +779,7 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
         D = -D
     if typ == 'bigRM':
         if version == 'new':
-            alpha = get_alpha(D)[1]
+            alpha = get_alpha(D)
         else:
             alpha = ATR_alpha(D, n)
         L0 = alpha.parent()
@@ -794,7 +795,10 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
             H = (L.hilbert_class_field(names='tt').composite_fields(F)[0]).absolute_field(names=names)
         except AttributeError:
             H = NumberField(magma(L).HilbertClassField().AbsoluteField().DefiningPolynomial()._sage_(),names='tt').composite_fields(F)[0].absolute_field(names=names)
-    prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
+    if typ == 'bigRM':
+        prime_list = [p for p in prime_range(prime_bound)]
+    else:
+        prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
     if typ != 'bigRM':
         assert all(len(M.ideal(p).factor()) < M.degree() for p in prime_list)
     return H, prime_list
@@ -824,8 +828,9 @@ def quo_rem_quadratic_old(a,b):
     return (q, r)
 
 def xgcd_quadratic(a, b):
-    v1 = vector([1,0])
-    v2 = vector([0,1])
+    F = a.parent()
+    v1 = vector([F(1),F(0)])
+    v2 = vector([F(0),F(1)])
     if b == 0:
         return (a, v1[0], v1[1])
     if a == 0:
@@ -1057,7 +1062,7 @@ def RMCEval(J, D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     else:
         if cycle_type != 'bigRM':
             raise NotImplementedError('Cycle type should be either "smallCM" or "smallRM" or "bigRM"')
-        A, tau0, hE = J.bigRMcycle(D, alpha=alpha, n=n)
+        A, tau0, hE = J.bigRMcycle(D, alpha=alpha, n=n, version='old')
 
     if any(t.trace() == 2 * t for t in tau0):
         raise ValueError(f'Tuple {(D, alpha) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
@@ -1282,6 +1287,8 @@ def cocycle(q : int, label : str, M : int, fname=None, parallelize=True):
     ### RMC
     t = walltime()
     F2 = F2.RMC(parallelize=parallelize)
+    del F2.datalist
+    del F2.G.input_list
     print(f'Saving to {fname}...')
     save(F2, fname)
     print(f'Finished in {walltime(t)} seconds')
@@ -1311,7 +1318,7 @@ def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, ti
     if __name__ != '__main__':
         return Jtau, ans
 
-def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
+def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None, J=None):
     p = q
 
     if fname is None:
@@ -1322,8 +1329,9 @@ def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None):
         D, n = D
     else:
         n = 1
-    J = load(fname)
-    Jtau, hE = RMCEval(J, D, cycle_type, M, n, return_class_number=True)
+    if J is None:
+        J = load(fname)
+    Jtau, hE = RMCEval(J, D, cycle_type, M, alpha=None, n=n, return_class_number=True)
     if __name__ == '__main__':
         print(Jtau)
     return Jtau, hE
@@ -1434,7 +1442,7 @@ def get_label(f):
 # This command can run all of it
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
 
-def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log', prime_bound=600):
+def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log', prime_bound=600, J=None):
     logfile = outdir + '/' + log
     if typ is None or typ == 'all':
         cycle_types = ['smallCM', 'smallRM', 'bigRM']
@@ -1449,7 +1457,8 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
 
     fwrite(f'Doing cocycle {fname}...', logfile)
     p, M = get_p_prec(fname)
-    J = load(fname)
+    if J is None:
+        J = load(fname)
     label = get_label(fname)
     for D in Dvalues:
         for cycle_type in cycle_types:
@@ -1459,7 +1468,11 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
                 try:
                     try:
                         fwrite(f'Computing {fname} {D},{n},{cycle_type}...', logfile)
-                        Jtau0, hE = RMCEval(J, D, cycle_type, M, n=n, return_class_number=True)
+                        Jtau0, hE = RMCEval(J, D, cycle_type, 10, alpha=None, n=n, return_class_number=True)
+                        if Jtau0 == 1:
+                            fwrite(f'Computed Jtau = 1 for {D = } {n = } {hE = }...', outfile)
+                            continue
+                        Jtau0, hE = RMCEval(J, D, cycle_type, M, alpha=None, n=n, return_class_number=True)
                         Cp = Jtau0.parent()
                     except (ValueError, NotImplementedError, TypeError, RuntimeError, PrecisionError, SignalError, KeyboardInterrupt, ModuleNotFoundError) as e:
                         if 'no elements of norm -1' not in str(e):
@@ -1519,8 +1532,8 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
                 except KeyboardInterrupt:
                     fwrite(f'WARNING! Keyboard interrupt so skipping {cycle_type = } {p = } {label = } {D = }, {n = }', logfile)
                     sleep(1)
-                # except Exception as e:
-                #     fwrite(f'WARNING! Unhandled exception so skipping {cycle_type = } {p = } {label = } {D = }, {n = } : {str(e)}', logfile)
+                except Exception as e:
+                    fwrite(f'WARNING! Unhandled exception so skipping {cycle_type = } {p = } {label = } {D = }, {n = } : {str(e)}', logfile)
 
 if __name__ == '__main__':
   Fire({'cocycle': cocycle,'evaluate': evaluate,'functional':functional, 'recognize':recognize,

@@ -25,7 +25,6 @@ from sage.modules.fg_pid.fgp_module import FGP_Module,FGP_Module_class
 from sage.arith.misc import valuation
 from sage.misc.misc_c import prod
 from sage.functions.transcendental import Function_zeta
-from sage.groups.finitely_presented import wrap_FpGroup
 from sage.misc.all import cartesian_product_iterator, cached_method
 from sage.misc.latex import latex, LatexExpr
 from sage.rings.padics.padic_generic import local_print_mode
@@ -723,7 +722,7 @@ def recognize_DGL_lindep(J, L, prime_list, Cp = None, units=None, outfile=None, 
                     pass
                 if new_ans is not None:
                     print(new_ans)
-                    # return ans
+                    return ans
         return ans
     K = J.parent()
     p = K.prime()
@@ -2117,51 +2116,6 @@ def covolume(F,D,M = 1,prec = None,zeta = None):
     index = RR(Psi)
     indexunits = 1 # There is a factor missing here, due to units.
     return covol * index / indexunits
-
-def simplification_isomorphism(G,return_inverse = False):
-    """
-    Return an isomorphism from ``self`` to a finitely presented group with
-    a (hopefully) simpler presentation.
-
-    EXAMPLES::
-
-        sage: from sage.groups.free_group import FreeGroup
-        sage: G.<a,b,c> = FreeGroup()
-        sage: H = G / [a*b*c, a*b^2, c*b/c^2]
-        sage: I = H.simplification_isomorphism()
-        sage: I # random
-        Generic morphism:
-          From: Finitely presented group < a, b, c | a*b*c, a*b^2, c*b*c^-2 >
-          To:   Finitely presented group < b |  >
-        sage: I(a), I(b), I(c) # random
-        b^-2, b, b
-
-    TESTS::
-
-        sage: from sage.groups.free_group import FreeGroup
-        sage: F = FreeGroup(1)
-        sage: G = F.quotient([F.0])
-        sage: G.simplification_isomorphism() # random
-        Generic morphism:
-          From: Finitely presented group < x | x >
-          To:   Finitely presented group <  |  >
-          Defn: x |--> 1
-
-    ALGORITM:
-
-    Uses GAP.
-    """
-    I = G.gap().IsomorphismSimplifiedFpGroup()
-    domain = G
-    codomain = wrap_FpGroup(I.Range())
-    phi = lambda x: codomain(I.ImageElm(x.gap()))
-    ans = G.hom(phi, codomain)
-    if return_inverse:
-        Iinv = I.InverseGeneralMapping()
-        phi_inv = lambda x: domain(Iinv.ImageElm(x.gap()))
-        return ans,codomain.hom(phi_inv,G)
-    else:
-        return ans
 
 def update_progress(progress,msg = ""):
     barLength = 20 # Modify this to change the length of the progress bar
