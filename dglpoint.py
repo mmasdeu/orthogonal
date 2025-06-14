@@ -1,7 +1,7 @@
 #/usr/bin/python
 # -*- coding: utf-8 -*-
 # File: dglpoint.py
-from util import *
+
 from fire import Fire
 from stopit import ThreadingTimeout
 from sage.all import SageObject, srange, QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, MatrixSpace
@@ -10,11 +10,11 @@ from multiprocessing import cpu_count
 from concurrent import futures
 from sage.misc.timing import cputime
 from collections import defaultdict
-from util import *
 from darmonpoints.divisors import Divisors
+from darmonpoints.util import *
+from dglutil import *
 
 from time import sleep
-from fire import Fire
 import stopit
 
 from xml.parsers.expat import ExpatError
@@ -60,6 +60,35 @@ def get_label(f):
     fsp = f.split('_')
     return fsp[2] + '_' + fsp[3]
 
+def label_from_functional(func, sep="·"):
+    pos = ""
+    neg = ""
+    for i, o in enumerate(func):
+        if o > 0:
+            pos = pos + o * (sep + str(i + 1))
+        elif o < 0:
+            neg = neg + (-o) * (sep + str(i + 1))
+    return pos[1:] + "_" + neg[1:]
+
+
+def functional_from_label(label, sep="·"):
+    func = {}
+    pos, neg = label.split("_")
+    for i in pos.split(sep):
+        try:
+            func[int(i) - 1] += 1
+        except KeyError:
+            func[int(i) - 1] = 1
+    for i in neg.split(sep):
+        try:
+            func[int(i) - 1] -= 1
+        except KeyError:
+            func[int(i) - 1] = -1
+    lfunc = max(func.keys()) + 1
+    ans = [0 for _ in range(lfunc)]
+    for ky, val in func.items():
+        ans[ky] = val
+    return tuple(ans)
 
 def random_point_on_A0(K):
     p = K.prime()
