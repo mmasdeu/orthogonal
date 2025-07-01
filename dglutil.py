@@ -1,5 +1,20 @@
-from darmonpoints.util import *
-from sage.rings.number_field import NumberField
+from darmonpoints.util import our_nroot
+from sage.rings.all import NumberField
+from sage.rings.infinity import Infinity
+
+
+def act_flt(gamma, tau):
+    if isinstance(tau, list):
+        return [act_flt(gamma, t) for t in tau]
+    a, b, c, d = gamma.list()
+    # K = tau.parent()
+    if tau == 0:
+        return b / d if d else Infinity
+    elif tau == Infinity:
+        return a / c if c else Infinity
+    else:
+        return (a * tau + b) / (c * tau + d)
+
 
 def recognize_DGL_algdep(J, degree, tolerance=0.9, roots_of_unity=None, outfile=None):
     K = J.parent()
