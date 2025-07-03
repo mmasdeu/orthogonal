@@ -1365,7 +1365,49 @@ def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None, J=N
         print(Jtau)
     return Jtau, hE
 
-def functional(p, N = 20, MFs = None):
+def functional(p, N = 20):
+    # We only consider d with are not a norm from Z[i]
+    sum_of_squares = lambda n : \
+        all(e % 2 == 0 for p, e in ZZ(n).factor() if p % 4 == 3)
+    valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
+
+    g = ModularForms(4*p).cuspidal_subspace().gens()[0].q_expansion(N)
+    E1 = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
+    E2 = lambda n : (-1)**n * sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
+    A = Matrix([[ZZ(g[o]) for o in valid_ds], [E1(o) for o in valid_ds], [E2(o) for o in valid_ds]])
+
+    # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
+    # the first position of the vector in the kernel corresponds to a_1, and so on
+    L = IntegralLattice(ZZ(len(valid_ds))).sublattice(A.right_kernel().basis())
+    length_cap = 8
+    all_vectors = sum(L.short_vectors(length_cap),[])
+    ans = []
+    ans_expanded = []
+    W = L.submodule(ans)
+    i = 0
+    while W.rank() < L.rank():
+        verbose(W.rank(),L.rank())
+        try:
+            while L.submodule(ans + [all_vectors[i]]).rank() == W.rank():
+                i += 1
+        except IndexError:
+            length_cap *= QQ(3)/2
+            length_cap = ZZ(length_cap.ceil())
+            all_vectors = sum(L.short_vectors(length_cap),[])
+        try:
+            v = all_vectors[i]
+        except IndexError:
+            continue
+        verbose(f'Adding {v = }')
+        ans.append(v)
+        vexp = [0 for _ in range(1,N)]
+        for val, idx in zip(v, valid_ds):
+            vexp[idx-1] = val
+        ans_expanded.append(vexp)
+        W = L.submodule(ans)
+    return [label_from_functional(o) for o in ans_expanded]
+
+def functional_old(p, N = 20, MFs = None):
     # We only consider d with are not a norm from Z[i]
     sum_of_squares = lambda n : \
         all(e % 2 == 0 for p, e in ZZ(n).factor() if p % 4 == 3)
