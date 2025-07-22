@@ -4,7 +4,7 @@
 
 from fire import Fire
 from stopit import ThreadingTimeout
-from sage.all import SageObject, srange, QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, MatrixSpace
+from sage.all import SageObject, srange, PolynomialRing, ZZ, QQ, Matrix, matrix, prod, QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, MatrixSpace
 from sage.rings.padics.precision_error import PrecisionError
 from multiprocessing import cpu_count
 from concurrent import futures
@@ -603,8 +603,8 @@ class Cocycle(SageObject):
             ncpus = ncpus
         except NameError:
             ncpus = cpu_count()
-        res0 = {(i,j) : [1, 1] for i in range(p+1) for j in range(p+1)}
-        res = {(i,j) : 1 for i in range(p+1) for j in range(p+1)}
+        res0 = {(i,j) : [self.Ruv(1), self.Ruv(1)] for i in range(p+1) for j in range(p+1)}
+        res = {}
         dg =  {(i,j) : 0 for i in range(p+1) for j in range(p+1)}
         input_vec = []
         for A, exponent in V:
