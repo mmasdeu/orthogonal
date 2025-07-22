@@ -1372,6 +1372,8 @@ def functional(p, N = 20):
     valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
 
     g = ModularForms(4*p).cuspidal_subspace().gens()[0].q_expansion(N)
+    d = lcm([o.denominator() for o in list(g)])
+    g *= d
     E1 = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
     E2 = lambda n : (-1)**n * sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
     A = Matrix([[ZZ(g[o]) for o in valid_ds], [E1(o) for o in valid_ds], [E2(o) for o in valid_ds]])
@@ -1386,14 +1388,17 @@ def functional(p, N = 20):
     W = L.submodule(ans)
     i = 0
     while W.rank() < L.rank():
-        verbose(W.rank(),L.rank())
+        verbose((W.rank(),L.rank()))
         try:
-            while L.submodule(ans + [all_vectors[i]]).rank() == W.rank():
+            while all_vectors[i] in W: #L.submodule(ans + [all_vectors[i]]).rank() == W.rank():
                 i += 1
         except IndexError:
+            verbose('Increasing length_cap')
             length_cap *= QQ(3)/2
             length_cap = ZZ(length_cap.ceil())
             all_vectors = sum(L.short_vectors(length_cap),[])
+            i = 0
+            continue
         try:
             v = all_vectors[i]
         except IndexError:
