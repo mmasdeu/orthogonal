@@ -4,15 +4,15 @@
 
 from fire import Fire
 from stopit import ThreadingTimeout
-from sage.all import SageObject, srange, PolynomialRing, ZZ, QQ, Matrix, matrix, prod, QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, MatrixSpace
+from sage.all import verbose, cached_method, cached_function, prime_range, magma, lcm, cartesian_product_iterator, Zmod, Infinity, product, divisors, NumberField, Qp, ZZ, SageObject, srange, PolynomialRing, ZZ, QQ, Matrix, matrix, prod, QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, MatrixSpace
 from sage.rings.padics.precision_error import PrecisionError
 from multiprocessing import cpu_count
 from concurrent import futures
 from sage.misc.timing import cputime
 from collections import defaultdict
 from darmonpoints.divisors import Divisors
-from darmonpoints.util import *
-from dglutil import *
+from darmonpoints.util import update_progress
+from dglutil import act_flt, recognize_DGL_algdep, recognize_DGL_lindep
 
 from time import sleep
 import stopit
@@ -839,7 +839,7 @@ def quo_rem_quadratic(a,b): # DEBUG
     K = a.parent()
     (w,) = K.maximal_order().ring_generators()
     q0 = ((a/b)[0]).floor() + ((a/b)[1]).floor()*K.gen()
-    for e0, e1 in product([0,1], repeat=2):
+    for e0, e1 in cartesian_product_iterator([[0,1], [0,1]]):
         q = q0 + e0 + e1*w
         r = a - q*b
         if r.norm().abs() < b.norm().abs():
@@ -1371,12 +1371,17 @@ def functional(p, N = 20):
         all(e % 2 == 0 for p, e in ZZ(n).factor() if p % 4 == 3)
     valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
 
-    g = ModularForms(4*p).cuspidal_subspace().gens()[0].q_expansion(N)
-    d = lcm([o.denominator() for o in list(g)])
-    g *= d
+    glist = [g.q_expansion(N) for g in ModularForms(4*p).cuspidal_subspace().gens()]
+    
     E1 = lambda n : sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
     E2 = lambda n : (-1)**n * sum([ o for o in ZZ(n).divisors() if o % 4 != 0])
-    A = Matrix([[ZZ(g[o]) for o in valid_ds], [E1(o) for o in valid_ds], [E2(o) for o in valid_ds]])
+    rows = [[QQ(g[o]) for o in valid_ds] for g in glist]
+    rows.extend([[E1(o) for o in valid_ds], [E2(o) for o in valid_ds]])
+    A = Matrix(rows)
+    for i, r in enumerate(A.rows()):
+        l = lcm([QQ(o).denominator() for o in r])
+        A.rescale_row(i, l)
+    A = A.change_ring(ZZ)
 
     # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
     # the first position of the vector in the kernel corresponds to a_1, and so on
@@ -1420,11 +1425,13 @@ def functional_old(p, N = 20, MFs = None):
 
     if MFs is None:
         MFs = ModularForms(4*p).gens()
+
     A = Matrix([[QQ(g[o]) for o in valid_ds] for g in MFs])
     for i in range(A.nrows()):
         l = lcm([QQ(o).denominator() for o in A.row(i)])
         A.rescale_row(i, l)
     A = A.change_ring(ZZ)
+
     # print(A)
     # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
     # the first position of the vector in the kernel corresponds to a_1, and so on
