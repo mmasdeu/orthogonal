@@ -11,7 +11,7 @@ from concurrent import futures
 from sage.misc.timing import cputime
 from collections import defaultdict
 from darmonpoints.divisors import Divisors
-from darmonpoints.util import update_progress
+from darmonpoints.util import update_progress, list_powers
 from dglutil import act_flt, recognize_DGL_algdep, recognize_DGL_lindep
 
 from time import sleep
