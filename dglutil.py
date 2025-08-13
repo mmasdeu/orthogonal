@@ -102,12 +102,14 @@ def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **
     if phi_list is None:
         phi_list = [L.hom([rt]) for rt in embeddings]
 
+    max_size = kwargs.get('max_size', Infinity)
     for phi in phi_list:
         V = [None]
         Vlogs = [K_to_Cp(J.log(0))]
         W = ["J"]
         hL = 1
         glist = []
+        size = 0
         for ell in prime_list:
             for pp, _ in L.ideal(ell).factor():
                 verbose(f"(Factoring {ell}")
@@ -118,6 +120,9 @@ def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **
                     gens = (pp**hL0).gens_reduced(proof=False)
                 hL = hL0
                 glist.append((gens[0], hL, ell))
+            size += L.degree() * RR(ell).log()
+            if size > max_size:
+                break
         glist = [
             (g ** ZZ(hL / e), ell) for g, e, ell in glist if phi(g).valuation() == 0
         ]
