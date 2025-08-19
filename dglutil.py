@@ -1,4 +1,4 @@
-from darmonpoints.util import our_nroot
+from darmonpoints.util import *
 from sage.rings.all import NumberField
 from sage.rings.infinity import Infinity
 
@@ -16,7 +16,7 @@ def act_flt(gamma, tau):
         return (a * tau + b) / (c * tau + d)
 
 
-def recognize_DGL_algdep(J, degree, toleratce=0.9, roots_of_unity=None, outfile=None):
+def recognize_DGL_algdep(J, degree, tolerance=0.9, roots_of_unity=None, outfile=None):
     K = J.parent()
     p = K.prime()
     if roots_of_unity is None:

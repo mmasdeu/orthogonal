@@ -11,7 +11,7 @@ from concurrent import futures
 from sage.misc.timing import cputime
 from collections import defaultdict
 from darmonpoints.divisors import Divisors
-from darmonpoints.util import update_progress, list_powers
+from darmonpoints.util import *
 from dglutil import act_flt, recognize_DGL_algdep, recognize_DGL_lindep
 
 from time import sleep
@@ -1525,7 +1525,9 @@ def get_label(f):
 # This command can run all of it
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
 
-def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log', prime_bound=600, J=None):
+def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log', prime_bound=600, J=None, max_size=None):
+    if max_size is None:
+        max_size = Infinity
     logfile = outdir + '/' + log
     if typ is None or typ == 'all':
         cycle_types = ['smallCM', 'smallRM', 'bigRM']
@@ -1599,7 +1601,7 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
                                 break
                         if not success and prime_list is not None and ('big' not in cycle_type or H.degree() <= 16):
                             with stopit.ThreadingTimeout(3600) as to_ctx_mgr:
-                                ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, degree_bound=8, algorithm='pari')
+                                ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, degree_bound=8, algorithm='pari', max_size=max_size)
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
                                 fwrite(f'Someone got impatient...  {cycle_type = } {p = } {label = } {D = }, {n = }', logfile)
                                 ans = None
