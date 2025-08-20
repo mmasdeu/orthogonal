@@ -29,6 +29,8 @@ def recognize_DGL_algdep(J, degree, tolerance=0.9, roots_of_unity=None, outfile=
         try:
             Jzlist.append((our_nroot(Jz, 2), i, 2))
             Jzlist.append((our_nroot(Jz, 4), i, 4))
+            Jzlist.append((our_nroot(Jz, 8), i, 8))
+            Jzlist.append((our_nroot(Jz, 16), i, 16))
         except ValueError:
             continue
     for Jz, i, pw in sorted(Jzlist, key=lambda v: v[2], reverse=True):
