@@ -1578,7 +1578,7 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
                             fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }... ({char} not recognized since H could not be computed)', outfile)
                             H = None
                             prime_list = None
-                        for deg in [2,4,8]:
+                        for deg in [2,4,8,16]:
                             with stopit.ThreadingTimeout(30) as to_ctx_mgr:
                                 ans = recognize_DGL_algdep(Jtau, deg, outfile=None, roots_of_unity=[1])
                             if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
