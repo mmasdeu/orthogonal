@@ -161,7 +161,7 @@ def main(path='outfiles/'):
 
 
             line('h1', 'Tables of DGL points')
-            last_update = time.ctime(max(os.path.getmtime(root) for root,_,_ in os.walk(path)))
+            last_update = time.ctime(max(os.path.getmtime(os.path.join(root, f)) for root,_,files in os.walk(path) for f in files))
             line('p', f'Last update: {last_update}')
             line('h2', 'Experimental observations')
             with tag('ul'):
