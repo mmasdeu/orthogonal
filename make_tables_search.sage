@@ -100,6 +100,7 @@ def make_table(fname):
             if 'Computed' in ln:
                 Dn, nn = get_Dn(ln)
                 val['D'] = Dn
+                val['n'] = nn
                 if 'Jtau = 1' in ln:
                     v1 = copy(val)
                     v1.update({'field' : 'x', 'factor' : 'J = (1)', 'poly' : 'x - 1', 'hpoly' : '-', 'J' : '1', 'trivial' : True, 'recognized' : True, 'o(ζ)' : 1})
@@ -124,6 +125,7 @@ def make_table(fname):
                 trivial = True if str(poly) == "x - 1" else False
                 v1.update({'char' : char, 'field' : field, 'factor' : factor, 'poly' : poly, 'hpoly' : hpoly, 'J' : J, 'trivial' : trivial, 'recognized' : True, 'o(ζ)' : d})
                 ds.append(v1)
+        ds = sorted(list(map(dict, frozenset(frozenset(i.items()) for i in ds))), key = lambda o : o['D'])
         return ds
 
 def main(path='outfiles/'):
@@ -199,7 +201,7 @@ def main(path='outfiles/'):
                 line('li', 'J : an integer-encoded form for Jtriv or Jconj. See above for how to recover it')
 
 
-            columns = ['p', 'label', 'D', 'type', 'char', 'trivial', 'recognized', 'field', 'factor', 'poly', 'hpoly', 'o(ζ)', 'J']
+            columns = ['p', 'label', 'D', 'n', 'type', 'char', 'trivial', 'recognized', 'field', 'factor', 'poly', 'hpoly', 'J', 'o(ζ)']
             doc.asis(df.to_html(classes=['table', 'table-striped', 'table-bordered' ], table_id='dgltable', sparsify=False, escape=False, index=False, columns=columns)[:-8]\
 +"<tfoot>\n" + " ".join(["<th>"+ i +"</th>\n" for i in columns])+"</tr>\n  </tfoot></table>")
 

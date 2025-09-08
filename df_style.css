@@ -1,7 +1,7 @@
 /* includes alternating gray and white with on-hover color */
 
 body {
-	margin: 2em;
+	margin: 1em;
 }
 
 
@@ -16,7 +16,7 @@ body {
 }
 
 .dgltable td {
-    max-width:30%;
+    max-width:25%;
     padding: 3px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -39,4 +39,4 @@ body {
 
 .dt-button-collection {
 overflow-y: scroll;
-
+}
