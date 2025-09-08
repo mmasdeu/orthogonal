@@ -12,11 +12,24 @@ $(document).ready(function () {
 	if (prec == 0) {
 		prec = 100;
 	}
+	if (data[9] == '?') {
+		sage_code = "prime_list = [];";
+	}
+	else
+	{
+		sage_code = "prime_list = [" + data[9].replace(/<[^>]*>?/gm, '').split("[")[1].split("]")[0] + "];";
+	}
+	sage_code += " p = " + data[0] + "; prec = " + prec + ";";
+	sage_code += " label = '" + data[1] + "'; D = " + data[2] + "; n = " + data[3] + "; type = '" + data[4] + "'; char = '" + data[5] + "';";
+	sage_code += " J0 = " + data[12] + "; Cp.<t> = Qq(p**2, prec);";
 	if (data[5] == 'triv') {
-		sage_code = "prime_list = [" + data[9].replace(/<[^>]*>?/gm, '').split("[")[1].split("]")[0] + "]; p = " + data[0] + "; prec = " + prec + "; label = " + data[1] + "; D = " + data[2] + "; n = " + data[3] + "; type = '" + data[4] + "'; char = '" + data[5] + "'; J0 = " + data[12] + "; J = Qq(p**2, prec, names='t')(2*J0);";
+		sage_code += "J = Cp(2*J0);";
 	}
 	else {
-		sage_code = "prime_list = [" + data[9].replace(/<[^>]*>?/gm, '').split("[")[1].split("]")[0] + "]; p = " + data[0] + "; prec = " + prec + "; label = " + data[1] + "; D = " + data[2] + "; n = " + data[3] + "; type = '" + data[4] + "'; char = '" + data[5] + "'; J0 = " + data[12] + "; J = Qq(p**2, prec, names='t')(J0) + ((1-Qq(p**2, prec, names='t')(J0)**2)/(t - t.trace()/2).norm()).sqrt() * (t - t.trace()/2);";
+		sage_code += "J = Cp(J0) + ((1-Cp(J0)**2)/(t - t.trace()/2).norm()).sqrt() * (t - t.trace()/2);";
+	}
+	if (data[8] != '?') {
+		sage_code += " L.<z> = NumberField(" + data[8] + "); H.<ξ> = NumberField(" + data[11] + "); ";
 	}
 	
 	navigator.clipboard.writeText(sage_code);
@@ -107,24 +120,5 @@ $(document).ready(function () {
 		});
 	}
     });
-	table.on('click', 'button', function (e) {
-    let data = table.row(e.target.closest('tr')).data();
-	let sage_code = "";
-	let prec = Math.ceil((Math.log(data[12]) / Math.log(data[0])));
-	if (prec == 0) {
-		prec = 100;
-	}
-	if (data[5] == 'triv') {
-		sage_code = "prime_list = [" + data[9].replace(/<[^>]*>?/gm, '').split("[")[1].split("]")[0] + "]; p = " + data[0] + "; prec = " + prec + "; label = " + data[1] + "; D = " + data[2] + "; n = " + data[3] + "; type = '" + data[4] + "'; char = '" + data[5] + "'; J0 = " + data[12] + "; J = Qq(p**2, prec, names='t')(2*J0);";
-	}
-	else {
-		sage_code = "prime_list = [" + data[9].replace(/<[^>]*>?/gm, '').split("[")[1].split("]")[0] + "]; p = " + data[0] + "; prec = " + prec + "; label = " + data[1] + "; D = " + data[2] + "; n = " + data[3] + "; type = '" + data[4] + "'; char = '" + data[5] + "'; J0 = " + data[12] + "; J = Qq(p**2, prec, names='t')(J0) + ((1-Qq(p**2, prec, names='t')(J0)**2)/(t - t.trace()/2).norm()).sqrt() * (t - t.trace()/2);";
-	}
-	
-	navigator.clipboard.writeText(sage_code);
-
-	// Alert the copied text
-	alert("Copied row to clipboard:\n" + sage_code);
-});
 });
 ;
