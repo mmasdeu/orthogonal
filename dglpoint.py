@@ -4,18 +4,20 @@
 
 from fire import Fire
 from stopit import ThreadingTimeout
-from sage.all import verbose, cached_method, cached_function, prime_range, magma, lcm, cartesian_product_iterator, Zmod, Infinity, product, divisors, NumberField, Qp, ZZ, SageObject, srange, PolynomialRing, ZZ, QQ, Matrix, matrix, prod, QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, MatrixSpace
+from sage.all import verbose, cached_method, cached_function, prime_range, magma, lcm, cartesian_product_iterator, Zmod, Infinity, product, divisors, NumberField, Qp, ZZ, SageObject, srange, PolynomialRing, ZZ, QQ, Matrix, matrix, prod, QuadraticField, load, Integer, parallel, GF, walltime, vector, save, fundamental_discriminant, Qq,  ModularForms, IntegralLattice, MatrixSpace, floor
 from sage.rings.padics.precision_error import PrecisionError
+from sage.parallel.decorate import fork
 from multiprocessing import cpu_count
 from concurrent import futures
 from sage.misc.timing import cputime
 from collections import defaultdict
 from darmonpoints.divisors import Divisors
 from darmonpoints.util import *
+from darmonpoints.util import fwrite, solve_quadratic, list_powers
 from dglutil import act_flt, recognize_DGL_algdep, recognize_DGL_lindep
 
 from time import sleep
-import stopit
+import os
 
 from xml.parsers.expat import ExpatError
 from sage.rings.padics.precision_error import PrecisionError
@@ -23,32 +25,6 @@ from cysignals.signals import SignalError
 from builtins import ModuleNotFoundError
 
 G = None
-
-x = QQ['x'].gen()
-valid_ATR_fields = dict([(41, x**4 + 4*x**3 + x**2 - 6*x - 8),
-                         (113, x**4 - 28*x**2 - 256),
-                         (137, x**4 + 4*x**3 + 105*x**2 + 202*x - 224),
-                         (313, x**4 + 4*x**3 - 111*x**2 - 230*x - 3032),
-                         (337, x**4 + 4*x**3 - 3*x**2 - 14*x - 72),
-                         (409, x**4 - 12*x**2 - 1600),
-                         (457, x**4 + 4*x**3 - 15*x**2 - 38*x - 24),
-                         (521, x**4 - 44*x**2 - 1600),
-                         (569, x**4 + 4*x**3 - 111*x**2 - 230*x - 8216),
-                         (593, x**4 - 92*x**2 - 256),
-                         (809, x**4 + 4*x**3 + x**2 - 6*x - 200),
-                         (857, x**4 + 4*x**3 - 255*x**2 - 518*x - 584),
-                         (881, x**4 + 4*x**3 - 219*x**2 - 446*x - 5408),
-                         (1153, x**4 + 4*x**3 - 27*x**2 - 62*x - 48),
-                         (1201, x**4 + 4*x**3 - 219*x**2 - 446*x - 11888),
-                         (1217, x**4 - 124*x**2 - 1024),
-                         (1249, x**4 - 60*x**2 - 4096),
-                         (1321, x**4 + 4*x**3 - 39*x**2 - 86*x - 26288),
-                         (1553, x**4 - 92*x**2 - 4096),
-                         (1657, x**4 - 68*x**3 - 1276*x**2 + 135712*x + 1478656),
-                         (1777, x**4 - 156*x**2 - 1024),
-                         (1889, x**4 + 4*x**3 - 11*x**2 - 30*x - 416),
-                         (1993, x**4 - 172*x**2 - 576),
-                         (2113, x**4 + 4*x**3 - 291*x**2 - 590*x - 21032), (2129, x**4 - 92*x**2 - 6400), (2273, x**4 + 4*x**3 + 53*x**2 + 98*x + 32), (2377, x**4 + 4*x**3 - 183*x**2 - 374*x - 39392), (2521, x**4 - 140*x**2 - 5184), (2593, x**4 + 4*x**3 - 147*x**2 - 302*x - 46808), (2617, x**4 + 4*x**3 + 465*x**2 + 922*x + 136), (2657, x**4 + 4*x**3 - 435*x**2 - 878*x - 5624), (2689, x**4 + 4*x**3 - 27*x**2 - 62*x - 432), (2729, x**4 + 4*x**3 - 39*x**2 - 86*x - 54800), (2833, x**4 - 92*x**2 - 9216), (2953, x**4 + 4*x**3 - 47*x**2 - 102*x - 88), (3001, x**4 - 204*x**2 - 1600), (3089, x**4 + 4*x**3 + 501*x**2 + 994*x - 800), (3217, x**4 + 4*x**3 - 3*x**2 - 14*x - 792), (3361, x**4 - 60*x**2 - 12544), (3433, x**4 - 100*x**3 - 2684*x**2 + 369056*x + 6718464), (3593, x**4 + 4*x**3 - 47*x**2 - 102*x - 248), (3761, x**4 + 4*x**3 - 219*x**2 - 446*x - 63728), (3881, x**4 - 236*x**2 - 1600), (3929, x**4 - 140*x**2 - 10816), (4049, x**4 - 220*x**2 - 4096), (4073, x**4 + 4*x**3 - 327*x**2 - 662*x - 55088), (4177, x**4 + 4*x**3 - 75*x**2 - 158*x - 83024), (4273, x**4 + 4*x**3 - 507*x**2 - 1022*x - 21248), (4289, x**4 + 4*x**3 - 59*x**2 - 126*x - 80), (4513, x**4 - 188*x**2 - 9216), (4657, x**4 - 148*x**3 - 476*x**2 + 589472*x + 8856576), (4721, x**4 + 4*x**3 - 219*x**2 - 446*x - 83168), (4793, x**4 + 4*x**3 - 111*x**2 - 230*x - 93752), (4801, x**4 + 4*x**3 - 59*x**2 - 126*x - 208), (4817, x**4 + 4*x**3 - 363*x**2 - 734*x - 63872), (4969, x**4 + 4*x**3 - 327*x**2 - 662*x - 73232), (4993, x**4 - 244*x**3 + 13348*x**2 + 347168*x + 589824), (5233, x**4 - 28*x**2 - 20736), (5393, x**4 + 4*x**3 - 651*x**2 - 1310*x - 1952), (5641, x**4 + 4*x**3 + 81*x**2 + 154*x + 72), (5657, x**4 + 4*x**3 - 543*x**2 - 1094*x - 39752), (5801, x**4 + 4*x**3 + x**2 - 6*x - 1448), (5897, x**4 - 44*x**2 - 23104), (6073, x**4 + 4*x**3 - 71*x**2 - 150*x - 112), (6217, x**4 + 4*x**3 - 183*x**2 - 374*x - 117152), (6329, x**4 + 4*x**3 - 71*x**2 - 150*x - 176), (6353, x**4 + 4*x**3 - 651*x**2 - 1310*x - 21392), (6449, x**4 - 28*x**2 - 25600), (6473, x**4 - 164*x**3 - 2172*x**2 + 936608*x + 19784704), (6529, x**4 + 4*x**3 - 579*x**2 - 1166*x - 47240), (6689, x**4 + 4*x**3 - 11*x**2 - 30*x - 1616), (7001, x**4 - 140*x**2 - 23104), (7121, x**4 - 220*x**2 - 16384), (7193, x**4 - 260*x**3 + 12036*x**2 + 862496*x + 5914624), (7321, x**4 + 4*x**3 - 543*x**2 - 1094*x - 73448), (7369, x**4 + 4*x**3 - 759*x**2 - 1526*x - 3680), (7393, x**4 - 188*x**2 - 20736), (7417, x**4 - 76*x**2 - 28224), (7489, x**4 + 4*x**3 - 291*x**2 - 590*x - 129896), (7793, x**4 - 28*x**2 - 30976), (7841, x**4 - 316*x**2 - 6400), (8009, x**4 + 4*x**3 - 79*x**2 - 166*x - 280), (8089, x**4 - 268*x**2 - 14400), (8161, x**4 + 4*x**3 - 75*x**2 - 158*x - 480), (8209, x**4 - 220*x**2 - 20736), (8273, x**4 - 84*x**3 - 13532*x**2 + 907168*x + 58491904), (8297, x**4 + 4*x**3 + 825*x**2 + 1642*x + 496), (8329, x**4 - 300*x**2 - 10816), (8369, x**4 + 4*x**3 - 19*x**2 - 46*x - 1960), (8377, x**4 - 204*x**2 - 23104), (8521, x**4 + 4*x**3 - 759*x**2 - 1526*x - 27008), (8609, x**4 - 188*x**2 - 25600), (8681, x**4 - 364*x**2 - 1600), (9137, x**4 - 284*x**2 - 16384), (9257, x**4 - 228*x**3 + 1924*x**2 + 1558432*x + 30647296), (9377, x**4 - 316*x**2 - 12544), (9433, x**4 + 4*x**3 - 831*x**2 - 1670*x - 16712), (9473, x**4 + 4*x**3 - 867*x**2 - 1742*x - 2168), (9497, x**4 + 4*x**3 - 55*x**2 - 118*x - 1504), (9601, x**4 - 380*x**2 - 2304), (9689, x**4 - 132*x**3 - 12284*x**2 + 1408288*x + 69222400), (9697, x**4 + 4*x**3 - 75*x**2 - 158*x - 864), (9817, x**4 + 4*x**3 + 105*x**2 + 202*x + 96), (9929, x**4 + 4*x**3 - 759*x**2 - 1526*x - 55520), (10009, x**4 - 12*x**2 - 40000), (10169, x**4 + 4*x**3 - 111*x**2 - 230*x - 202616), (10177, x**4 - 124*x**2 - 36864), (10337, x**4 - 316*x**2 - 16384), (10369, x**4 - 252*x**2 - 25600), (10433, x**4 + 4*x**3 - 91*x**2 - 190*x - 352), (10513, x**4 + 4*x**3 - 651*x**2 - 1310*x - 105632)])
 
 def get_p_prec(f):
     fsp = f.split('_')
@@ -70,6 +46,14 @@ def label_from_functional(func, sep="·"):
             neg = neg + (-o) * (sep + str(i + 1))
     return pos[1:] + "_" + neg[1:]
 
+def cycle_support(label, sep = "·"):
+    supp = set()
+    pos, neg = label.split("_")
+    for i in pos.split(sep):
+        supp.add(int(i))
+    for i in neg.split(sep):
+        supp.add(int(i))
+    return sorted(list(supp))
 
 def functional_from_label(label, sep="·"):
     func = {}
@@ -101,20 +85,6 @@ def random_point_on_A0(K):
             continue
     b = a.trace() - a
     return a,b
-
-def get_alpha(D):
-    try:
-        f = valid_ATR_fields[D]
-    except KeyError:
-        raise ValueError(f'No bigRM cycle computed for discriminant {D}')
-
-    K = NumberField(x*x - D, names ='t')
-    E = NumberField(f, names = 'gE')
-    EK = E.relativize(K.embeddings(E)[0], 'gEF')
-    r0 = f.roots(EK)[0][0]
-    alpha = r0.minpoly().discriminant()
-    assert alpha.relative_norm().squarefree_part() == -1
-    return alpha
 
 
 class DGLGroup(SageObject):
@@ -668,9 +638,26 @@ class Cocycle(SageObject):
         ans = self.map_poly(ans.change_ring(self.Rp))        
         return j1, j2, ans
 
-    def next(self, **kwargs):
+    def change_parity(self, **kwargs):
         global gF
-        gF = self.datalist[-1]
+        gF = self.data
+        ans = self.apply_Up(**kwargs)
+        timing = kwargs.get('timing', False)
+        if timing:
+            res, times = ans
+        else:
+            res = ans
+        R0 = self.Ruv.base_ring()
+        psi = R0.hom([ZZ['u'].gen()],base_map=lambda x:x.lift(),check=False)
+        self.data = {ky : f.change_ring(psi) for ky, f in res.items()}
+        self.L0, self.L1 = self.L1, self.L0
+        del self.G.input_list
+        return self if not timing else (self, times)
+        
+
+    def apply_Up(self, **kwargs): # Apply Up to gF and return the result
+        global gF, G
+        G = self.G
         timing = kwargs.get('timing', False)
         p = kwargs.get('p', None)
         if p is None:
@@ -679,25 +666,40 @@ class Cocycle(SageObject):
         ncpus = kwargs.get('ncpus', cpu_count())
         res = {}
         times = vector([0, 0, 0])
+        try:
+            input_list = self.G.input_list
+        except AttributeError:
+            input_list = self.initialize_input_list()
         if parallelize:
             with futures.ProcessPoolExecutor(max_workers=ncpus) as executor:
                 # Iteration
-                future_dict = {executor.submit(Transform, outky) : outky for outky in self.G.input_list}
+                future_dict = {executor.submit(Transform, outky) : outky for outky in input_list}
                 for fut in futures.as_completed(future_dict):
                     outky = future_dict[fut]
                     ans, (t1p, t2p, t3p) = fut.result()
                     times += vector([t1p, t2p, t3p])
                     res[outky] = ans
         else:
-            assert 0
-            for outky in self.G.input_list:
+            for outky in input_list:
                 res[outky], (t1p, t2p, t3p) = Transform(outky)
                 times += vector([t1p, t2p, t3p])
-        self.datalist.append(res)
         if timing:
-            return self, tuple(times)
+            return res, tuple(times)
         else:
-            return self
+            return res
+
+
+    def next(self, **kwargs):
+        global gF
+        gF = self.datalist[-1]
+        ans = self.apply_Up(**kwargs)
+        timing = kwargs.get('timing', False)
+        if timing:
+            res, times = ans
+        else:
+            res = ans
+        self.datalist.append(res)
+        return self if not timing else (self, times)
 
     def RMC(self, **kwargs):
         coset_list = kwargs.get('coset_list', None)
@@ -749,23 +751,19 @@ class Cocycle(SageObject):
         hE = QuadraticField(D,'w').class_number()
         return A, [t0, t0], hE # not a typo!
 
-    def bigRMcycle(self, D, n=1, alpha=None, version='old'):
-        if version not in ['old', 'new']:
-            raise ValueError('version must be either "old" or "new"')
-        if version == 'old':
-            if alpha is None:
-                alpha = ATR_alpha(D, n)
-            else:
-                assert n == 1, 'n would not be used'
+    def bigATRcycle(self, D, n=1, alpha=None):
+        if alpha is None:
+            alpha = ATR_alpha(D, n)
         else:
-            assert alpha is None and n == 1
-            alpha = get_alpha(D)
+            assert n == 1, 'n would not be used'
         try:
             A, tau0, tau1 = compute_gamma_tau_ATR(self.phi, alpha)
-            E = tau_ATR_field(alpha)
+            K = tau_ATR_field(alpha)
+            E = K.galois_closure(names='t')
+            hE = (K.class_number(proof=False), E.class_number(proof=False))
         except IndexError:
-            raise ValueError(f'No bigRM cycle computed for discriminant {D} (IndexError...)')
-        return A, [tau0, tau1], E.class_number()
+            raise ValueError(f'No bigATR cycle computed for discriminant {D} (IndexError...)')
+        return A, [tau0, tau1], hE
 
 def multiply_one_dict(x,y):
     return {ky : x[ky] * y[ky] for ky in x}
@@ -789,7 +787,7 @@ def multiply_dicts(dict_list, parallelize=True, ncpus=4):
         ans = {ky : prod(r[ky] for r in res) for ky in res[0] }
     return ans
 
-def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_bound=600, version='old'):
+def get_predicted_field(F, D, n, typ, char, names='z', galois_closure=True):
     r'''
     If smallRM:
     - If char == triv: return F
@@ -799,41 +797,37 @@ def get_predicted_field_and_prime_list(F, D, n, typ, char, names='z', prime_boun
     - If char == triv: return HCF of Q(sqrt(-D))
     - If char == conj: return Q
     '''
+
     if typ in ['smallRM','smallCM'] and n != 1:
-        return None, None
+        return None
     if char not in ['triv', 'conj']:
         raise ValueError('Parameter "char" must be either "triv" or "conj"')
-    x = QQ['x'].gen()
     if typ == 'smallCM':
         D = -D
-    if typ == 'bigRM':
-        if version == 'new':
-            alpha = get_alpha(D)
-        else:
-            alpha = ATR_alpha(D, n)
-        L0 = alpha.parent()
+    if typ == 'bigATR':
+        alpha = ATR_alpha(D, n)
         L1 = tau_ATR_field(alpha)
-        L = L1.absolute_field(names='t')
+        L = L1.absolute_field(names='t0')
+        if galois_closure:
+            L = L.galois_closure(names='t1')
     else:
         L = QuadraticField(D, names='a')
-        M = (L.composite_fields(F, names='t0')[0]).absolute_field(names='t1')
     if typ == 'smallCM' and char == 'conj':
-        H = QQ
+        H = F
     else:
         try:
-            H = (L.hilbert_class_field(names='tt').composite_fields(F)[0]).absolute_field(names=names)
+            verbose('Computing Hilbert class field...')
+            H = L.hilbert_class_field(names='tt')
         except AttributeError:
-            H = NumberField(magma(L).HilbertClassField().AbsoluteField().DefiningPolynomial()._sage_(),names='tt').composite_fields(F)[0].absolute_field(names=names)
-    if typ == 'bigRM':
-        prime_list = [p for p in prime_range(prime_bound)]
-    else:
-        prime_list = [p for p in prime_range(prime_bound) if len(L.ideal(p).factor()) < L.degree()]
-    if typ != 'bigRM':
-        assert all(len(M.ideal(p).factor()) < M.degree() for p in prime_list)
-    return H, prime_list
+            verbose('Computing Hilbert class field via Magma...')
+            from sage.interfaces.magma import Magma
+            magma = Magma()
+            H = NumberField(magma(L).HilbertClassField().AbsoluteField().DefiningPolynomial()._sage_(),names='tt')
+        H = H.composite_fields(F)[0].absolute_field(names=names)
+    return H
 
 # Related to Manin Trick
-def quo_rem_quadratic(a,b): # DEBUG
+def quo_rem_quadratic(a,b):
     if b == 0:
         raise ZeroDivisionError
     K = a.parent()
@@ -1079,19 +1073,19 @@ def fixed_point(g, phi):
 
 
 
-def RMCEval(J, D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
+def RMCEval(J, D, cycle_type, prec, alpha=None, n=1):
     try:
         ncpus = ncpus
     except NameError:
         ncpus = cpu_count()
+    if cycle_type not in ['smallCM','smallRM','bigATR']:
+        raise NotImplementedError('Cycle type should be either "smallCM" or "smallRM" or "bigATR"')
     if cycle_type == 'smallCM':
         A, tau0, hE = J.smallCMcycle(D)
     elif cycle_type == 'smallRM':
         A, tau0, hE = J.smallRMcycle(D)
     else:
-        if cycle_type != 'bigRM':
-            raise NotImplementedError('Cycle type should be either "smallCM" or "smallRM" or "bigRM"')
-        A, tau0, hE = J.bigRMcycle(D, alpha=alpha, n=n, version='old')
+        A, tau0, hE = J.bigATRcycle(D, alpha=alpha, n=n)
 
     if any(t.trace() == 2 * t for t in tau0):
         raise ValueError(f'Tuple {(D, alpha) = } is not admissible for {cycle_type} cycle: the resulting tau is not in Hp.')
@@ -1107,10 +1101,8 @@ def RMCEval(J, D, cycle_type, prec, alpha=None, n=1, return_class_number=False):
     # else:
     #     res1 = prod(Eval(act_flt(m.apply_morphism(phi).adjugate(), tau0), prec)**sgn for m, sgn in mlist)
     ans = ans.add_bigoh(prec + ans.valuation())
-    if return_class_number:
-        return ans, hE
-    else:
-        return ans
+    return ans, hE
+    
 
 def random_candidate_matrices(r, limit=-1):
     found_matrices = 0
@@ -1182,7 +1174,7 @@ def ATR_alpha(D, n=1):
     try:
         return QuadraticField(D, names='t').elements_of_norm(-1)[0] * n
     except IndexError:
-        raise ValueError(f'Discriminant (={D}) not admissible: no elements of norm -1 in QQ(sqrt(D))')
+        raise ValueError(f'Discriminant (={D}) not admissible: no elements of norm -1 in QQ(√{D})')
 
 
 def tau_ATR_field(alpha, names='w'):
@@ -1190,6 +1182,67 @@ def tau_ATR_field(alpha, names='w'):
     y = FF['y'].gen()
     return NumberField(y*y - alpha, names=names)
 
+
+def bigATR_K(D, n):
+    alpha = ATR_alpha(D,n)
+    E = tau_ATR_field(alpha)
+    Eg = E.galois_closure(names='b')
+    K = None
+    for K1 in Eg.subfields(degree=4):
+        if K1[0].signature() == (0,2) and not K1[0].is_galois():
+            K = K1[0]
+            break
+    if K is None:
+        raise RuntimeError('Could not find K')
+    return K
+
+def smallCM_K(D, n=1):
+    if n != 1:
+        raise NotImplementedError('n should be 1 for smallCM')
+    x = QQ['x'].gen()
+    return NumberField([x**2 - D, x**2 + 1]).absolute_field(names='b')
+
+def get_q_from_K(K):
+    Krel = K.relativize(QuadraticField(-1,'i').embeddings(K)[0], names='k')
+    q = Krel.relative_discriminant().norm()
+    return q
+
+
+def DGL_primes(p, D, n, cycle_support, typ, **kwargs):
+    if typ not in ['smallCM', 'smallRM', 'bigATR']:
+        raise ValueError('typ should be either "smallCM" , "smallRM" or "bigATR"')
+    if typ == 'smallCM':
+        K = smallCM_K(D, n)
+    elif typ == 'bigATR':
+        K = bigATR_K(D, n)
+    else:
+        K = QuadraticField(D, names='b')
+        prime_bound = kwargs.get('prime_bound', None)
+        if prime_bound is None:
+            raise ValueError('For smallRM cycles, prime_bound must be provided')
+        return [p for p in prime_range(prime_bound) if len(K.ideal(p).factor()) < K.degree()]
+    q = get_q_from_K(K)
+    all_primes = candidate_primes(q, cycle_support, level=4 * p)
+    all_primes = [p for p in all_primes if len(K.ideal(p).factor()) == 2]
+    return all_primes
+
+def candidate_primes(q, cycle_support, level=1):
+    # Find all ell such that level * ell divides an integer of the form m^2 * q - n^2 with m in cycle_support and m^2 * q - n^2 > 0
+    res = set()
+    for m in cycle_support:
+        for n in range(0, floor(m * RR(q).sqrt()) + 1):
+            N = m**2 * q - n**2
+            if N % level != 0:
+                continue
+            if N <= 0:
+                continue
+            N //= level
+            for ell, _ in ZZ(N).factor():
+                if N % ell == 0:
+                    res.add(ell)
+    return sorted(list(res))
+
+    
 # it accepts a real quadratic field FF and an element alpha in FF of norm -1; then E = FF(sqrt(alpha) is the ATR extension and K = Q(i) is contained in the galois closure of E
 def compute_gamma_tau_ATR(phi, alpha):
     F = phi.domain()
@@ -1323,29 +1376,132 @@ def cocycle(q : int, label : str, M : int, fname=None, parallelize=True):
     print(f'Finished in {walltime(t)} seconds')
     return # F2, F1, G
 
-def recognize(q : int, label : str, D, cycle_type : str, M : int, fname=None, timeout=20, outfile=None, logfile=None, max_degree=16):
-    Jtau, hE = evaluate(q, label, D, cycle_type, M, fname)
-    if isinstance(D,tuple):
-        D, n = D
+def try_lindep(p, D, n, label, Jtau, cycle_type, char, H, hE, prime_list, **kwargs):
+    comments = ''
+    logfile = kwargs.get('logfile', None)
+    try:
+        ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, algorithm='pari', **kwargs)
+    except Exception as e:
+        fwrite(f'Someone got impatient...  {cycle_type = } {p = } {label = } {D = }, {n = } e = {str(e)}', logfile)                
+        ans = None
+        comments += f' Exception ({str(e)}) @ lindep.'
+    if ans is None and 'Exception' not in comments: # DEBUG: I don't understand why sometimes J fails and 1/J works
+        try:
+            ans = recognize_DGL_lindep(1 / Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, algorithm='pari', **kwargs)
+        except Exception as e:
+            fwrite(f'Someone got impatient...  {cycle_type = } {p = } {label = } {D = }, {n = } e = {str(e)}', logfile)                
+            ans = None
+            comments += ' Exception' + str(e) + ' @ lindep 1/J. '
+    if ans is None:
+        return '', comments
     else:
-        n = 1
-    success = False
-    for deg in [2**i for i in range(1, 10) if 2**i <= max_degree]:
-        with ThreadingTimeout(timeout) as to_ctx_mgr:
-            ans = recognize_DGL_algdep(Jtau, deg, outfile=None)
-        if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
-            fwrite('Someone got impatient...', logfile)
-            ans = (None, None, None)
+        ffpoly, rec, d, clist_ans, field = ans
+        msg = f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }...\n'
+        msg += f'SUCCESS {char} with lindep: ' + str(Jtau.unit_part().add_bigoh(10)) + f'({ffpoly}, {field}, {rec}, {d}, 0, 1, {clist_ans}, {H.defining_polynomial()})'
+        comments += ramification_string(ffpoly, [H])
+        K = kwargs.get('ATRfield', None)
+        if K is not None:
+            comments += ' Q(J) in atr^gc' if len(ffpoly.roots(K)) > 0 else ' Q(J) NOT in atr^gc'
+        return msg, comments
+
+def ramification_string(ff, fields):
+    msg = ''
+    for H0 in fields:
+        newterm = ''
+        if H0.is_absolute():
+            H = H0
+        else:
+            H = H0.absolute_field(names='z')
+        for fac, _ in ff.change_ring(H).factor():
+            DD = H.extension(fac, names='z0').relative_discriminant()
+            newterm += ' ' + str(DD.norm().factor())
+        msg += '|' + newterm
+    return msg
+
+def recognize(p, D, n, label, Jtau, cycle_type, char, **kwargs):
+    F = QuadraticField(-1, names='i')
+    supp = cycle_support(label)
+    logfile = kwargs.get('logfile', None)
+    skip_lindep = kwargs.get('skip_lindep', False)
+    hE = kwargs.pop('hE', 1)
+    max_hE = kwargs.get('max_hE', Infinity)
+    max_lindep_primes = kwargs.get('max_lindep_primes', 1000)
+    prime_list = DGL_primes(p, D, n, cycle_support=supp, typ=cycle_type, **kwargs)
+    newcomment = f' (# primes = {len(prime_list)})'
+    fwrite(newcomment, logfile)
+    comments = newcomment
+    if cycle_type == 'bigATR':
+        alpha = ATR_alpha(D,n)
+        K = tau_ATR_field(alpha)
+        H = K.galois_closure(names='b')
+    elif cycle_type == 'smallRM':
+        K = QuadraticField(D, names='b')
+        H = K
+    else:
+        K = QuadraticField(-D, names='b')
+        H = K    
+    for deg in [2,4,8,16]:
+        verbose(f'{deg = }')
+        ans = fork(recognize_DGL_algdep, timeout=60)(Jtau, deg, outfile=None, roots_of_unity=[1,-1])
+        if isinstance(ans, str):
+            newcomment = f'Timeout @ algdep {deg}. '
+            comments += newcomment
+            fwrite(newcomment, logfile)
+            ans = None
             break
+        verbose(f'{ans = }')
         if ans[0] is not None:
-            success = True
-            fwrite(f'Computed Jtau for {D = } {n = } {hE = }...', outfile)
-            fwrite('SUCCESS: ' + str(ans[0].add_bigoh(10)) + str(ans[1:]), outfile)
-            break
-    if not success:
-        fwrite(f'Computed Jtau for {D = } {n = } {hE = }... (not recognized)', outfile)
-    if __name__ != '__main__':
-        return Jtau, ans
+            msg = f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }...\n'
+            support = [q for q, _ in ans[-1] if q in ZZ]
+            dta = list(ans[1:])
+            ffsmall = dta[1]
+            newcomment = ' Q(J) in atr^gc' if len(ffsmall.roots(H)) > 0 else ' Q(J) NOT in atr^gc'
+            fwrite(newcomment, logfile)
+            comments += newcomment
+            newcomment = ramification_string(ffsmall, [K, H]) if K != H else ramification_string(ffsmall, [H])
+            comments += newcomment
+            fwrite(newcomment, logfile)
+            dta.append('?')
+            msg += f'SUCCESS {char} with algdep: ' + str(ans[0].unit_part().add_bigoh(10)) + str(tuple(dta))
+            if any(q not in prime_list for q in support):
+                comments += ' Extra primes ' + str([q for q in support if q not in prime_list])
+            return msg, comments
+    if not skip_lindep and len(prime_list) < max_lindep_primes:
+        msg, newcomments = try_lindep(p, D, n, label, Jtau, cycle_type, char, H, hE, prime_list, ATRfield = H, timeout=300, **kwargs)
+        fwrite(newcomments, logfile)
+        comments += newcomments
+        if msg != '':
+            return msg, 'atr^gc' + comments
+        else:
+            newcomment = ' lindep atr^gc failed. '
+            fwrite(newcomment, logfile)
+            comments += newcomment
+        if max_hE > 0 and K.class_number(proof=False) <= max_hE:
+            H = fork(get_predicted_field, timeout=60)(F, D, n, cycle_type, char, names='z', galois_closure=False)
+            if not isinstance(H, str) and H is not None:
+                msg, newcomments = try_lindep(p, D, n, label, Jtau, cycle_type, char, H, hE, prime_list, timeout=300, **kwargs)
+                fwrite(newcomments, logfile)
+                comments += newcomments
+                if msg != '':
+                    return msg, 'H(atr)' + comments
+                else:
+                    newcomment = ' lindep H(atr) failed. '
+                    fwrite(newcomment, logfile)
+                    comments += newcomment
+                
+        else:
+            newcomment = ' HCF1 skipped.'
+            fwrite(newcomment, logfile)
+            comments += newcomment
+    else:
+        newcomment = f' Skipped lindep (# primes = {len(prime_list)})'
+        fwrite(newcomment, logfile)
+        comments += newcomment
+        newcomment = f' Skipped lindep ([H:Q] = ?))' if 'HCL' in comments else f' Skipped lindep ([H:Q] = {H.degree()})'
+        fwrite(newcomment, logfile)
+        comments += newcomment
+    msg = f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }... ({char} not recognized)'
+    return msg, comments
 
 def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None, J=None):
     p = q
@@ -1360,7 +1516,7 @@ def evaluate(q : int, label : str, D, cycle_type : str, M : int, fname=None, J=N
         n = 1
     if J is None:
         J = load(fname)
-    Jtau, hE = RMCEval(J, D, cycle_type, M, alpha=None, n=n, return_class_number=True)
+    Jtau, hE = RMCEval(J, D, cycle_type, M, alpha=None, n=n)
     if __name__ == '__main__':
         print(Jtau)
     return Jtau, hE
@@ -1404,53 +1560,6 @@ def functional(p, N = 20):
             all_vectors = sum(L.short_vectors(length_cap),[])
             i = 0
             continue
-        try:
-            v = all_vectors[i]
-        except IndexError:
-            continue
-        verbose(f'Adding {v = }')
-        ans.append(v)
-        vexp = [0 for _ in range(1,N)]
-        for val, idx in zip(v, valid_ds):
-            vexp[idx-1] = val
-        ans_expanded.append(vexp)
-        W = L.submodule(ans)
-    return [label_from_functional(o) for o in ans_expanded]
-
-def functional_old(p, N = 20, MFs = None):
-    # We only consider d with are not a norm from Z[i]
-    sum_of_squares = lambda n : \
-        all(e % 2 == 0 for p, e in ZZ(n).factor() if p % 4 == 3)
-    valid_ds = [i for i in range(1, N) if not sum_of_squares(i)]
-
-    if MFs is None:
-        MFs = ModularForms(4*p).gens()
-
-    A = Matrix([[QQ(g[o]) for o in valid_ds] for g in MFs])
-    for i in range(A.nrows()):
-        l = lcm([QQ(o).denominator() for o in A.row(i)])
-        A.rescale_row(i, l)
-    A = A.change_ring(ZZ)
-
-    # print(A)
-    # vectors in the kernel correspond to functionals that vanish on g and on the Eisenstein series
-    # the first position of the vector in the kernel corresponds to a_1, and so on
-    L = IntegralLattice(ZZ(len(valid_ds))).sublattice(A.right_kernel().basis())
-    length_cap = 8
-    all_vectors = sum(L.short_vectors(length_cap),[])
-    ans = []
-    ans_expanded = []
-    W = L.submodule(ans)
-    i = 0
-    while W.rank() < L.rank():
-        verbose(W.rank(),L.rank())
-        try:
-            while L.submodule(ans + [all_vectors[i]]).rank() == W.rank():
-                i += 1
-        except IndexError:
-            length_cap *= QQ(3)/2
-            length_cap = ZZ(length_cap.ceil())
-            all_vectors = sum(L.short_vectors(length_cap),[])
         try:
             v = all_vectors[i]
         except IndexError:
@@ -1522,98 +1631,87 @@ def get_label(f):
     fsp = f.split('_')
     return fsp[2] + '_' + fsp[3]
 
+def change_parity(fname):
+    J = load(fname)
+    J.change_parity()
+    save(J, fname.strip('.')[0] + '_odd.sobj')
+    return
+
 # This command can run all of it
 # for file in L0Jtuple_*.sobj;do tmux new-session -d -s `basename $file | sed 's/·//g' | sed 's/\.//g'` "conda run -n sage sage find_all_types.sage $file";done;
 
-def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log', prime_bound=600, J=None, max_size=None):
+def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', log='output.log', \
+                       prime_bound=600, J=None, max_size=None, skip_lindep=False, max_n=1, max_hE=12, degree_bound=16, max_lindep_primes=1000):
     if max_size is None:
         max_size = Infinity
     logfile = outdir + '/' + log
     if typ is None or typ == 'all':
-        cycle_types = ['smallCM', 'smallRM', 'bigRM']
+        cycle_types = ['smallCM', 'smallRM', 'bigATR']
     elif typ == 'small':
         cycle_types = ['smallCM', 'smallRM']
     else:
-        cycle_types = [typ]
-    F = QuadraticField(-1, names='r')
-
+        cycle_types = [typ]    
     Dvalues = [D for D in srange(ZZ(Dmin),ZZ(Dmax)) if D.is_fundamental_discriminant()]
-    nvalues = [1]
-
     fwrite(f'Doing cocycle {fname}...', logfile)
-    p, M = get_p_prec(fname)
     if J is None:
         J = load(fname)
+    if '_odd' in fname:
+        fname = fname.replace('_odd','')
+    p, M = get_p_prec(fname)        
     label = get_label(fname)
     for D in Dvalues:
         for cycle_type in cycle_types:
             outfile = outdir + '/' + f'points_{cycle_type}_{p}_{label}_{M}.txt'
-            nvalues = [1]
+            outfile_postmortem = outfile + '.partial'            
+            nvalues = range(1,max_n+1) if cycle_type == 'bigATR' else [1]
             for n in nvalues:
+                if not ZZ(n).is_squarefree():
+                    continue
                 try:
                     try:
                         fwrite(f'Computing {fname} {D},{n},{cycle_type}...', logfile)
-                        Jtau0, hE = RMCEval(J, D, cycle_type, 10, alpha=None, n=n, return_class_number=True)
+                        verbose(f'Computing {fname} {D},{n},{cycle_type} with precision 10...')
+                        Jtau0, hE = RMCEval(J, D, cycle_type, 10, alpha=None, n=n)
+                        verbose('...done')
                         if Jtau0 == 1:
                             fwrite(f'Computed Jtau = 1 for {D = } {n = } {hE = }...', outfile)
                             continue
-                        Jtau0, hE = RMCEval(J, D, cycle_type, M, alpha=None, n=n, return_class_number=True)
-                        Cp = Jtau0.parent()
+                        verbose(f'Computing {fname} {D},{n},{cycle_type} with precision {M}...')
+                        Jtau0, hE = RMCEval(J, D, cycle_type, M, alpha=None, n=n)
+                        verbose('...done')
                     except (ValueError, NotImplementedError, TypeError, RuntimeError, PrecisionError, SignalError, KeyboardInterrupt, ModuleNotFoundError) as e:
                         if 'no elements of norm -1' not in str(e):
                             fwrite(f'Skipping {fname} {D},{n},{cycle_type}...({str(e)})', logfile)
+                            verbose(f'Skipping {fname} {D},{n},{cycle_type}...({str(e)})')
                         continue
                     fwrite(f'Computed Jtau for {fname} {D} {n} {cycle_type}.', logfile)
                     if Jtau0 == 1:
                         fwrite(f'Computed Jtau = 1 for {D = } {n = } {hE = }...', outfile)
                         continue
                     for Jtau, char in [(Jtau0.norm(), 'triv'), (Jtau0**2 / Jtau0.norm(), 'conj')]:
-                        success = False
-                        try:
-                            with stopit.ThreadingTimeout(120) as to_ctx_mgr:
-                                H, prime_list = get_predicted_field_and_prime_list(F, D, n, cycle_type, char, names='z', prime_bound=prime_bound)
-                            if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
-                                raise ExpatError
-                        except ExpatError:
-                            fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }... ({char} not recognized since H could not be computed)', outfile)
-                            H = None
-                            prime_list = None
-                        for deg in [2,4,8,16]:
-                            with stopit.ThreadingTimeout(30) as to_ctx_mgr:
-                                ans = recognize_DGL_algdep(Jtau, deg, outfile=None, roots_of_unity=[1])
-                            if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
-                                fwrite('Someone got impatient...', logfile)
-                                ans = None
-                                break
-                            if ans[0] is not None:
-                                success = True
-                                fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }...', outfile)
-                                support = [q for q, _ in ans[-1] if q in ZZ]
-                                dta = list(ans[1:])
-                                dta.append('?' if H is None else H.defining_polynomial())
-                                msg = f'SUCCESS {char} with algdep: ' + str(ans[0].unit_part().add_bigoh(10)) + str(tuple(dta))
-                                if prime_list is None:
-                                    msg += ' warning: primes not checked!'
-                                else:
-                                    if any(q not in prime_list for q in support):
-                                        msg += ' warning: ' + str([q for q in support if q not in prime_list])
-                                fwrite(msg, outfile)
-                                break
-                        if not success and prime_list is not None and ('big' not in cycle_type or H.degree() <= 16):
-                            with stopit.ThreadingTimeout(3600) as to_ctx_mgr:
-                                ans = recognize_DGL_lindep(Jtau, H, prime_list = prime_list, outfile=None, recurse_subfields=True, degree_bound=8, algorithm='pari', max_size=max_size)
-                            if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
-                                fwrite(f'Someone got impatient...  {cycle_type = } {p = } {label = } {D = }, {n = }', logfile)
-                                ans = None
-                            if ans is not None:
-                                success = True
-                                ffpoly, rec, d, clist_ans, field = ans
-                                fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }...', outfile)
-                                fwrite(f'SUCCESS {char} with lindep: ' + str(Jtau.unit_part().add_bigoh(10)) + f'({ffpoly}, {field}, {rec}, {d}, 0, 1, {clist_ans}, {H.defining_polynomial()})', outfile)
-
-                        if not success:
-                            fwrite(f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }... ({char} not recognized)', outfile)
-                    fwrite('...', outfile)
+                        # Delete the postmortem file
+                        if os.path.exists(outfile_postmortem):
+                            os.remove(outfile_postmortem)                       
+                        
+                        ans = fork(recognize, timeout=3600)(p, D, n, label, Jtau, cycle_type, char, max_hE=max_hE,\
+                                                  max_size=max_size, prime_bound=prime_bound, hE=hE,\
+                                                  logfile=outfile_postmortem, skip_lindep=skip_lindep, degree_bound=degree_bound)
+                        if 'NO DATA' in ans:
+                            msg = f'Computed Jtau{char} = {(Jtau.trace()/2).lift()} for {D = } {n = } {hE = }... ({char} not recognized)'
+                            comments = ''
+                            # Try to open the postmortem file, if it exists
+                            if os.path.exists(outfile_postmortem):
+                                with open(outfile_postmortem, 'r') as ff:
+                                    for line in ff:
+                                        comments += line.strip() + '. '
+                                os.remove(outfile_postmortem)
+                            comments = 'Zombie timeout ' + ans.split('NO DATA')[1].strip() + comments
+                        else:
+                            msg, comments = ans
+                        if len(comments) > 0:
+                            msg += ' COMMENTS:' + comments
+                        fwrite(msg, outfile)
+                        fwrite('...', outfile)
                 except KeyboardInterrupt:
                     fwrite(f'WARNING! Keyboard interrupt so skipping {cycle_type = } {p = } {label = } {D = }, {n = }', logfile)
                     sleep(1)
@@ -1622,5 +1720,5 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
 
 if __name__ == '__main__':
   Fire({'cocycle': cocycle,'evaluate': evaluate,'functional':functional, 'recognize':recognize,
-         'eval_and_recognize': eval_and_recognize})
+         'eval_and_recognize': eval_and_recognize, 'change_parity': change_parity})
 

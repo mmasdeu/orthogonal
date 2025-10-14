@@ -1,7 +1,12 @@
 from darmonpoints.util import *
 from sage.rings.all import NumberField
 from sage.rings.infinity import Infinity
-
+from sage.arith.misc import fundamental_discriminant, legendre_symbol
+from sage.functions.generalized import sgn as sign
+from sage.misc.misc_c import prod
+from sage.misc.verbose import verbose
+from stopit import ThreadingTimeout
+import stopit
 
 def act_flt(gamma, tau):
     if isinstance(tau, list):
@@ -31,12 +36,14 @@ def recognize_DGL_algdep(J, degree, tolerance=0.9, roots_of_unity=None, outfile=
                 Jzlist.extend([(o, i, 2**d) for o in our_nroot(Jz, 2**d, return_all=True) ])
             except ValueError as e:
                 continue
-    for Jz, i, pw in sorted(Jzlist, key=lambda v: v[2]):
+    for Jz, i, pw in sorted(Jzlist, key=lambda v: v[-1]):
         ff = our_algdep(Jz, degree)
         x = ff.parent().gen()
         height_poly = height_polynomial(ff, base=p)
         if height_poly < height_threshold:
             ff = ff.factor()[-1][0]
+            if ff.degree() == 0:
+                continue
             nrm = QQ(ff.constant_coefficient()) / ff.leading_coefficient()
             real_tol = height_poly / J.precision_relative()
             clist_ans = [("J", 1)]
@@ -74,16 +81,31 @@ def recognize_DGL_algdep(J, degree, tolerance=0.9, roots_of_unity=None, outfile=
 def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **kwargs):
     r""" """
     recurse_subfields = kwargs.pop("recurse_subfields", False)
+    norm_one = kwargs.get("norm_one", J.norm() == 1)
     degree_bound = kwargs.pop("degree_bound", Infinity)
+    pow_div = kwargs.get("pow_div", 2**4)
+    adjust_root_of_unity = kwargs.get("adjust_root_of_unity", True)
     print(f"Doing DGL-lindep with {L = }")
     if recurse_subfields:
         kwargs["phi"] = None
         ans = None
-        for L0, _, _ in L.subfields():
+        done_fields = set([])
+        try:
+            subfields = [o[0] for o in L.subfields()]
+        except AttributeError:
+            subfields = [L]
+        for L0 in subfields:
             if L0.degree() <= degree_bound:
+                L0pol = sage_eval(
+                    str(pari("polredabs(%s)" % L0.defining_polynomial())), locals={"x": QQ["x"].gen()}
+                )
+                if L0pol in done_fields:
+                    continue
+                done_fields.add(L0pol)
+                L1 = NumberField(L0pol, names='zz')
                 try:
                     new_ans = recognize_DGL_lindep(
-                        J, L0, prime_list, Cp=Cp, units=units, outfile=outfile, **kwargs
+                        J, L1, prime_list, Cp=Cp, units=units, outfile=outfile, **kwargs
                     )
                     if new_ans is not None and ans is None:
                         ans = new_ans
@@ -98,7 +120,6 @@ def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **
     Jval = J.valuation()
     assert K(p).valuation() == 1
     J *= p**-Jval
-    prec = J.precision_relative()
     # embed L in a field containing K
     if Cp is None:
         Cp = K
@@ -111,85 +132,89 @@ def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **
     phi_list = kwargs.get("phi_list", None)
     if phi_list is None:
         phi_list = [L.hom([rt]) for rt in embeddings]
-
     max_size = kwargs.get('max_size', Infinity)
+    timeout = kwargs.get('timeout', 10**6)
     for phi in phi_list:
-        V = [None]
-        Vlogs = [K_to_Cp(J.log(0))]
-        W = ["J"]
-        hL = 1
-        glist = []
-        size = 0
-        for ell in prime_list:
-            for pp, _ in L.ideal(ell).factor():
-                verbose(f"(Factoring {ell}")
-                hL0 = 0
-                gens = [None, None]
-                while len(gens) > 1:
-                    hL0 += hL
-                    gens = (pp**hL0).gens_reduced(proof=False)
-                hL = hL0
-                glist.append((gens[0], hL, ell))
-            size += L.degree() * RR(ell).log()
-            if size > max_size:
-                break
-        glist = [
-            (g ** ZZ(hL / e), ell) for g, e, ell in glist if phi(g).valuation() == 0
-        ]
-        norm_one = kwargs.get("norm_one", J.norm() == 1)
-        while len(glist) > 0:
-            g0, ell = glist[0]
-            phiv = phi(g0)
-            if norm_one:
-                g1 = next(
-                    (
-                        o
-                        for o, ellp in glist[1:]
-                        if ellp == ell and (phiv / phi(o)).norm().log() == 0
-                    ),
-                    1,
-                )
-            else:
-                g1 = 1
-            V.append(g0 / g1)
-            Vlogs.append((phiv / phi(g1)).log(0))
-            W.append(ell)
-            glist = [(o, ell) for o, ell in glist if o != g0 and o != g1]
-
-        # Add units
-        if units is None:
-            units = list(L.units(proof=False))
+        if norm_one:
+            short_prime_list = filter_valid_primes(prime_list, phi)
         else:
-            units = [L(o) for o in units]
-        for i, u in enumerate(units):
-            V.append(u)
-            Vlogs.append(phi(u).log(0))
-            W.append(f"u{i}")
+            short_prime_list = prime_list
 
-        # Truncate precision if prec is specified
-        prec = kwargs.get("prec", prec)
-        if prec is not None:
-            Vlogs = [o.add_bigoh(prec) for o in Vlogs]
+        with stopit.ThreadingTimeout(timeout) as to_ctx_mgr:
+            V = [None]
+            Vlogs = [K_to_Cp(J.log(0)) / pow_div]
+            W = ["J"]
+            hL = 1
+            glist = []
+            size = 0
+            verbose('Factoring primes...')
+            for ell in short_prime_list:
+                for pp, _ in L.ideal(ell).factor():
+                    hL0 = 0
+                    is_principal = False
+                    while not is_principal:
+                        hL0 += hL
+                        pp_power = pp**hL0
+                        is_principal = pp_power.is_principal(proof=False)
+                    gens = (pp**hL0).gens_reduced(proof=False)
+                    assert len(gens) == 1
+                    hL = hL0
+                    glist.append((gens[0], hL, ell))
+                size += L.degree() * RR(ell).log()
+                if size > max_size:
+                    break
+            glist = [
+                (g ** ZZ(hL / e), ell) for g, e, ell in glist if phi(g).valuation() == 0
+            ]
+            while len(glist) > 0:
+                g0, ell = glist[0]
+                phiv = phi(g0)
+                if norm_one:
+                    g1 = next(
+                        (
+                            o
+                            for o, ellp in glist[1:]
+                            if ellp == ell and (phiv / phi(o)).norm().log() == 0
+                        ),
+                        1,
+                    )
+                else:
+                    g1 = 1
+                V.append(g0 / g1)
+                Vlogs.append((phiv / phi(g1)).log(0))
+                W.append(ell)
+                glist = [(o, ell) for o, ell in glist if o != g0 and o != g1]
 
-        # OK now cross fingers...
-        clist = kwargs.get("clist", None)
-        if clist is not None:
-            assert len(clist) == len(
-                Vlogs
-            ), f"Provided clist is of incorrect length (should be {len(Vlogs)})"
-            return sum([c * o for c, o in zip(clist, Vlogs)])
-        verbose(f"Running lindep with {len(Vlogs) = }")
-        if kwargs.get("debug_Vlogs", None) is not None:
-            return Vlogs
-        clist = our_lindep(Vlogs, **kwargs)
+            # Add units
+            if units is None:
+                units = list(L.units(proof=False))
+            else:
+                units = [L(o) for o in units]
+            for i, u in enumerate(units):
+                V.append(u)
+                Vlogs.append(phi(u).log(0))
+                W.append(f"u{i}")
+
+            # Truncate precision if prec is specified
+            prec = kwargs.get("prec", None)
+            if prec is not None:
+                Vlogs = [o.add_bigoh(prec) for o in Vlogs]
+            else:
+                prec = J.precision_absolute()
+            # OK now cross fingers...
+            verbose(f"Running lindep with {len(Vlogs) = }")
+            clist = our_lindep(Vlogs, **kwargs)
+        if to_ctx_mgr.state in [to_ctx_mgr.TIMED_OUT, to_ctx_mgr.INTERRUPTED]:
+            verbose("timed out lindep")
+            raise RuntimeError("timed out lindep")
         if clist[0] < 0:
             clist = [-o for o in clist]
-        verbose(f"clist = {clist}")
-        verbose(f"W = {W}")
+        verbose(f"clist = {list(zip(W, clist))}")
         verbose(f"Should be zero : {sum([c * o for c, o in zip(clist, Vlogs)])}")
         if clist[0] == 0:
             verbose(f"Not recognized: clist[0] = {clist[0]}")
             return None
+        
         ht = 2 * sum((1 + RR(o).abs()).log(p) for o in clist)
         verbose(f"(confidence factor: { ht / prec})")
         if ht > prec:
@@ -197,6 +222,11 @@ def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **
                 f"Not recognized (confidence factor: ht / prec = {ht / prec}): clist = {clist}"
             )
             return None
+        # Fix clist according to pow_div
+        clist[0] /= pow_div # DEBUG - should be integer
+        d = QQ(clist[0]).denominator()
+        clist = [QQ(clist[0]).numerator()] + [o * d for o in clist[1:]]
+        
         clist_ans = [(u, v) for u, v in zip(W, clist) if v != 0]
         fwrite("# SUCCESS!", outfile)
         fwrite(f"# {clist_ans}", outfile)
@@ -204,42 +234,41 @@ def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **
         if not algebraic:
             return clist_ans
         else:
-            verbose(str(clist_ans))
             if not clist[0] > 0:
                 verbose(f"Redundant set of primes?")
                 return None
             assert len(V) == len(clist)
-            J_alg = prod(u**-a for u, a in zip(V[1:], clist[1:]))
-            remainder = clist[0]
+            J_alg = L(prod(u**-a for u, a in zip(V[1:], clist[1:])))
+            remainder = ZZ(clist[0])
+            verbose(f"J_alg = {J_alg}")
             phiJalg = phi(J_alg)
             Jp = K_to_Cp(J)
             Jpr = Jp**remainder
             try:
                 check = (phiJalg / Jpr).log(0).valuation() >= 0.75 * prec
                 if not check:
-                    print("Did not pass check! Returning value anyway...")
+                    fwrite("Did not pass check! Returning value anyway...", outfile)
             except ValueError as e:
-                print("Did not pass check because it errored! (error = %s)" % str(e))
+                fwrite("Did not pass check because it errored! (error = %s)" % str(e), outfile)
 
-            # Adjust root of unity
-            n = len(Cp.residue_field()) - 1
-            R = ZZ["t, x"]
-            t, x = R.gens()
-            x0 = ZZ["x"].gen()
-            jlist = J_alg.minpoly().list()
-            d = lcm([o.denominator() for o in jlist])
-            jlist = [ZZ(d * o) for o in jlist]
-            jpol = sum(o * t**i for i, o in enumerate(jlist))
-            found = False
-            for i, zeta in enumerate(Cp.roots_of_unity()):
-                if (phiJalg - (zeta * Jpr)).valuation() >= 0.75 * prec:
-                    d = ZZ(n / ZZ(n).gcd(i))
-                    found = True
-                    break
-            if not found:
-                d = 0
-            adjust_root_of_unity = kwargs.get("adjust_root_of_unity", False)
             if adjust_root_of_unity:
+                # Adjust root of unity
+                n = len(Cp.residue_field()) - 1
+                R = ZZ["t, x"]
+                t, x = R.gens()
+                x0 = ZZ["x"].gen()
+                jlist = J_alg.minpoly().list()
+                d = lcm([o.denominator() for o in jlist])
+                jlist = [ZZ(d * o) for o in jlist]
+                jpol = sum(o * t**i for i, o in enumerate(jlist))
+                found = False
+                for i, zeta in enumerate(Cp.roots_of_unity()):
+                    if (phiJalg - (zeta * Jpr)).valuation() >= 0.75 * prec:
+                        d = ZZ(n / ZZ(n).gcd(i))
+                        found = True
+                        break
+                if not found:
+                    d = 0
                 found = False
                 phi = cyclotomic_polynomial(d)
                 dg = phi.degree()
@@ -255,6 +284,17 @@ def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **
                 ff = ff(x0 / p**Jval)
             else:
                 ff = J_alg.minpoly()
+                d = 0
+            # Finally, adjust the root for ff
+            x = ff.parent().gen()
+            fac_list = sorted([g for g, _ in ff.subs(x**remainder).factor()], key=lambda f: f.degree())
+            found = False
+            for ff in fac_list:
+                if ff(J).valuation() >= 0.75 * J.precision_relative():
+                    found = True
+                    break
+            if not found:
+                verbose("Could not find the actual polynomial")
             ffsmall = ff
             try:
                 ffsmall = sage_eval(
@@ -262,10 +302,58 @@ def recognize_DGL_lindep(J, L, prime_list, Cp=None, units=None, outfile=None, **
                 )
             except PariError:
                 pass
+
             return (
                 ff,
                 remainder,
                 d,
-                clist_ans,
+                clist_ans[:-len(units)], # remove units from the list, they are artifacts of the method
                 ffsmall,
             )  # DEBUG - didn't check that they match...
+
+def nonempty_embeddings(pp, D1, D2):
+    ans = set([])    
+    eps = lambda q : -1 if q == 2 else sign(legendre_symbol(D1fund, q) + legendre_symbol(D2fund, q))    
+    D1fund = fundamental_discriminant(D1)
+    D2fund = fundamental_discriminant(D2)
+    for x in range(1, RR((D1 * D2).sqrt()).ceil()):
+        num = D1 * D2 - x * x
+        if num % 4 != 0 or num < 0:
+            continue
+        num //= 4
+        if eps(pp) == -1 and num.valuation(pp) % 2 == 1:
+            ans = ans.union(set([p for p, e in num.factor() if eps(p) == -1 and e % 2 == 1 and p != pp]))
+    return sorted(list(ans))
+
+def covers(p, D, prime_list, Dmax=None, n=2):
+    if Dmax is None:
+        Dmax = D
+    cov = {}
+    for D2 in range(1, Dmax + 1):
+        cov[D2] = set(nonempty_embeddings(p, D, D2))
+    for Dlist in itertools.combinations(cov.keys(), n):
+        S = set.union(*[cov[D1] for D1 in Dlist])
+        S.add(p)
+        if S.issuperset(prime_list):
+            print(Dlist, sorted(list(S)))
+
+def filter_valid_primes(plist, emb):
+    L = emb.domain()
+    Cp = emb.codomain()
+    sp = lambda x : x.trace() - x
+    g = L.gen()
+    found = False
+    for sigma in L.automorphisms():
+        if (sp(emb(g)) - emb(sigma(g))).valuation() > .5 * Cp.precision_cap():
+            found = True
+            break
+    assert found
+    ans = []
+    for p in plist:
+        Plist = [P for P, _ in L.ideal(p).factor()]
+        if any(sigma(P) != P for P in Plist):
+            ans.append(p)
+    return ans
+
+    
+

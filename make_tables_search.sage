@@ -6,6 +6,8 @@ import fire
 import re
 import datetime
 from yattag import Doc, indent
+from copy import deepcopy
+from dglpoint import cycle_support
 doc, tag, text, line = Doc().ttl()
 
 
@@ -51,12 +53,16 @@ def print_factorization(fact):
     return f'{Jpow} = ' + str(Factorization(f1, sort=False, simplify=False))[6:] + \
         f' ({"".join(plist)})'
 
-def get_Dn(ln):
-    return tuple(int(o) for o in re.search('D = (.[0-9]*) n = (.[0-9]*)', ln).groups())
+def get_Dnh(ln):
+    ans = list(re.search('D = (.[0-9]*) n = (.[0-9]*) hE = (.[^\.]*)...', ln).groups())
+    ans[0] = int(ans[0])
+    ans[1] = int(ans[1])
+    return ans
+    # return tuple(int(o) for o in re.search('D = (.[0-9]*) n = (.[0-9]*) hE = (.[^\.]*)...', ln).groups())
 
 def get_poly_and_field(ln):
     x = ZZ['x'].gen()
-    data_list = re.search('.*O\(.*\^10\)\(([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), (.*), (.*)\)(.*)', ln).groups()
+    data_list = re.search('.*O\(.*\^10\)\(([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), ([^,]*), (.*), ([^\)]*)\)(.*)', ln).groups()
     vals = []
     for o in data_list:
         try:
@@ -68,9 +74,9 @@ def get_poly_and_field(ln):
     if type(pw) == list:
         pw = print_factorization(pw)
     if 'algdep' in ln:
-        pw += ' (a)' + msg
+        pw += ' (a)'
     else: # lindep
-        pw += ' (l)' + msg
+        pw += ' (l)'
     return poly, field, d, pw, hpoly
 
 def get_header(fname):
@@ -90,6 +96,7 @@ def make_table(fname):
     tp, p, label, prec = get_file_data(fname)
     val = {'p': p, 'label': label, 'type': tp}
     J = '?'
+    maxD = 1
     with open(fname, 'r') as f:
         ds = []
         for ln in f:
@@ -97,14 +104,21 @@ def make_table(fname):
                 continue
             if 'Jtriv' in ln and 'Jconj' in ln:
                 Jtriv, Jconj = tuple(QQ(o) for o in re.search('Jtriv = (.[0-9/]*), Jconj = (.[0-9/]*)', ln).groups())
+            if 'COMMENTS:' in ln:
+                val['comments'] = ln.split('COMMENTS:')[1].strip()
+            else:
+                val['comments'] = ''
             if 'Computed' in ln:
-                Dn, nn = get_Dn(ln)
+                Dn, nn, hE = get_Dnh(ln)
+                maxD = max(maxD, Dn)
                 val['D'] = Dn
-                val['n'] = nn
+                val['n'] = nn         
+                val['hE'] = hE
+                    
                 if 'Jtau = 1' in ln:
-                    v1 = copy(val)
+                    v1 = deepcopy(val)
                     v1.update({'field' : 'x', 'factor' : 'J = (1)', 'poly' : 'x - 1', 'hpoly' : '-', 'J' : '1', 'trivial' : True, 'recognized' : True, 'o(ζ)' : 1})
-                    v2 = copy(v1)
+                    v2 = deepcopy(v1)
                     v1['char'] = 'triv'
                     v2['char'] = 'conj'
                     ds.extend([v1,v2])
@@ -114,22 +128,24 @@ def make_table(fname):
                     except AttributeError:
                         J = '?'
                 if 'not recognized' in ln:
-                    v1 = copy(val)
-                    J, char = (J, 'triv') if 'triv' in ln else (J, 'conj')
+                    v1 = deepcopy(val)
+                    char = 'triv' if 'triv' in ln else 'conj'
                     v1.update({'char' : char, 'field' : '?', 'factor' : '?', 'poly' : '?', 'hpoly' : '?', 'J' : J, 'trivial' : False, 'recognized' : False, 'o(ζ)' : '?'})
                     ds.append(v1)
             elif 'SUCCESS' in ln:
                 poly, field, d, factor, hpoly = get_poly_and_field(ln)
-                J, char = (J, 'triv') if 'triv' in ln else (J, 'conj')
-                v1 = copy(val)
+                char = 'triv' if 'triv' in ln else 'conj'
+                v1 = deepcopy(val)
+                if v1['comments'] == '':
+                    v1['comments'] = str(primes)
                 trivial = True if str(poly) == "x - 1" else False
                 v1.update({'char' : char, 'field' : field, 'factor' : factor, 'poly' : poly, 'hpoly' : hpoly, 'J' : J, 'trivial' : trivial, 'recognized' : True, 'o(ζ)' : d})
                 ds.append(v1)
         ds = sorted(list(map(dict, frozenset(frozenset(i.items()) for i in ds))), key = lambda o : o['D'])
-        return ds
+        return ds, (p, label, tp, maxD)
 
 def main(path='outfiles/'):
-    type_list = ['smallCM', 'smallRM', 'bigRM']
+    type_list = ['smallCM', 'smallRM', 'bigATR']
     flist0 = glob.glob(path + '/*.txt')
     flist = []
     for typ in type_list:
@@ -142,7 +158,7 @@ def main(path='outfiles/'):
             with tag('title'):
                 doc.asis('Tables for DGL points')
             doc.asis('''
-  <link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css'>
+ <link rel='stylesheet' href='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css'>
 <link href="https://cdn.datatables.net/v/dt/jq-3.7.0/jszip-3.10.1/dt-2.0.6/b-3.0.2/b-colvis-3.0.2/b-html5-3.0.2/b-print-3.0.2/r-3.0.2/sb-1.7.1/datatables.min.css" rel="stylesheet">
 <link rel='stylesheet' href='https://cdn.datatables.net/1.10.12/css/dataTables.bootstrap.min.css'>
 <link rel='stylesheet' href='https://cdn.datatables.net/buttons/1.2.2/css/buttons.bootstrap.min.css'>
@@ -154,13 +170,16 @@ def main(path='outfiles/'):
         doc.asis('<link rel="stylesheet" type="text/css" href="df_style.css"/>')
         with tag('body'):
             tbl = []
+            stats = []
             for f in flist:
                 hdr = get_header(f)
                 typ = next(typ for typ in type_list if typ in hdr)
-                tbl.extend(make_table(f))
+                newtbl, newstats = make_table(f)
+                tbl.extend(newtbl)
+                stats.append(newstats)
             tbl = sorted(tbl, key = lambda v : ZZ(v['D']))
             df = pd.DataFrame(tbl, dtype=pd.StringDtype())
-
+            
 
             line('h1', 'Tables of DGL points')
             last_update = time.ctime(max(os.path.getmtime(os.path.join(root, f)) for root,_,files in os.walk(path) for f in files))
@@ -180,11 +199,20 @@ def main(path='outfiles/'):
                 tot_trivial = len([o for o in tbl if o["factor"] == "J = (1)"])
                 tot_unr = len([o for o in tbl if o["factor"] == "?"])
                 tot_rows = len(tbl)
-                tot_recog = len([o for o in tbl if not o['trivial'] and o['recognized']])
+                recog = [o for o in tbl if not o['trivial'] and o['recognized']]
+                total_recog = len(recog)
+                recog_smallCM = len([o for o in recog if o['type'] == 'smallCM'])
+                recog_smallRM = len([o for o in recog if o['type'] == 'smallRM'])
+                recog_bigATR = len([o for o in recog if o['type'] == 'bigATR'])
+                tot_recog = total_recog
                 line('li', f'Total completely trivial: {tot_trivial} (simultaneously for both characters)')
                 line('li', f'Total unrecognized: {tot_unr}')
-                line('li', f'Total recognized (nontrivial): {tot_recog}')
+                line('li', f'Total recognized (nontrivial): {tot_recog} (smallCM: {recog_smallCM}, smallRM: {recog_smallRM}, bigATR: {recog_bigATR})')
                 line('li', f'Total rows: {tot_rows}')
+                line('li', f'Largest computed computed discriminants:')
+                with tag('ul'):
+                    for p, label, typ, maxD in stats:
+                        line('li', f'For p = {p}, label = {label}, type = {typ}: {maxD}')
             line('h2', 'Column description')
             with tag('ul'):
                 line('li', 'p : prime')
@@ -196,14 +224,17 @@ def main(path='outfiles/'):
                 line('li', 'field : polynomial defining the field HJ generated by Jtriv or Jconj')
                 line('li', 'factor : a representation for the factorization of the ideal (Jtriv) or (Jconj). Only the prime below each prime in HJ is written. The list gives the primes in the support. Primes = 3 (mod 4) are represented in blue, while those = 1 (mod 4) are represented in red. The symbols (a) and (l) indicate which recognition algorithm was used.')
                 line('li', 'poly : minimal polynomial of ζ·Jtriv or ζ·Jconj for a certain root of unity ζ')
-                line('li', 'hpoly : polynomial defining the compositum of Q(i) with the Hilbert class field of real/imaginary field of absolute discriminant D.')
+                line('li', 'hpoly : polynomial defining the extension over which lindep was carried out')
                 line('li', 'o(ζ) : order of ζ')
                 line('li', 'J : an integer-encoded form for Jtriv or Jconj. See above for how to recover it')
-
-
-            columns = ['p', 'label', 'D', 'n', 'type', 'char', 'trivial', 'recognized', 'field', 'factor', 'poly', 'hpoly', 'J', 'o(ζ)']
-            doc.asis(df.to_html(classes=['table', 'table-striped', 'table-bordered' ], table_id='dgltable', sparsify=False, escape=False, index=False, columns=columns)[:-8]\
-+"<tfoot>\n" + " ".join(["<th>"+ i +"</th>\n" for i in columns])+"</tr>\n  </tfoot></table>")
+            
+            
+            
+            columns = ['p', 'label', 'D', 'n', 'type', 'char', 'trivial', 'recognized', 'field', 'factor', 'poly', 'hpoly', 'J', 'hE', 'o(ζ)', 'comments']
+            doc.asis(df.to_html(classes=['table', 'table-striped', 'table-bordered' ],
+                        table_id='dgltable', sparsify=False,
+                        escape=False, index=False,
+                        columns=columns)[:-8]+"<tfoot>\n" + " ".join(["<th>"+ i +"</th>\n" for i in columns])+"</tr>\n  </tfoot></table>")
 
             doc.asis('''
             <!-- partial -->
@@ -214,7 +245,7 @@ def main(path='outfiles/'):
 <script src='https://cdn.datatables.net/fixedheader/4.0.1/js/dataTables.fixedHeader.min.js'></script>
             <script  src="./script.js"></script>
             ''')
-    print(indent(doc.getvalue()))
+    print((doc.getvalue()))
 
 if __name__ == "__main__":
     fire.Fire(main)

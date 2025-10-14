@@ -8,10 +8,6 @@ $(document).ready(function () {
 	if (e.ctrlKey) {
     let data = table.row(e.target.closest('tr')).data();
 	let sage_code = "";
-	let prec = Math.ceil((Math.log(data[12]) / Math.log(data[0])));
-	if (prec == 0) {
-		prec = 100;
-	}
 	if (data[9] == '?') {
 		sage_code = "prime_list = [];";
 	}
@@ -19,7 +15,7 @@ $(document).ready(function () {
 	{
 		sage_code = "prime_list = [" + data[9].replace(/<[^>]*>?/gm, '').split("[")[1].split("]")[0] + "];";
 	}
-	sage_code += " p = " + data[0] + "; prec = " + prec + ";";
+	sage_code += " p = " + data[0] + "; prec = max(10, RR(" + data[12] + ").log(p).ceil());";
 	sage_code += " label = '" + data[1] + "'; D = " + data[2] + "; n = " + data[3] + "; type = '" + data[4] + "'; char = '" + data[5] + "';";
 	sage_code += " J0 = " + data[12] + "; Cp.<t> = Qq(p**2, prec);";
 	if (data[5] == 'triv') {
@@ -35,7 +31,7 @@ $(document).ready(function () {
 	navigator.clipboard.writeText(sage_code);
 
 	// Alert the copied text
-	alert("Copied row to clipboard:\n" + sage_code);		
+	// alert("Copied row to clipboard:\n" + sage_code);		
 	}
 	else
 	{	
@@ -78,7 +74,8 @@ $(document).ready(function () {
 		        title === "char" ||
 		        title === "trivial" ||
 		        title === "recognized" ||
-			title === "o(ζ)"
+			title === "o(ζ)"||
+			title === "hE"
 		       ) {
 
 			// Create select element
@@ -97,7 +94,7 @@ $(document).ready(function () {
 			column
 			    .data()
 			    .unique()
-			    .sort()
+			    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
 			    .each(function (d, j) {
 				select.add(new Option(d));
 			    });
@@ -122,3 +119,4 @@ $(document).ready(function () {
     });
 });
 ;
+
