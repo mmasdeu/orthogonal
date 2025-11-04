@@ -34,9 +34,13 @@ def get_p_prec(f):
 
 def get_label(f):
     fsp = f.split('_')
-    return fsp[2] + '_' + fsp[3]
+    if 'odd' in f or 'even' in f:
+        return fsp[2] + '_' + fsp[3] + '_' + fsp[4]
+    else:
+        return fsp[2] + '_' + fsp[3] + '_even'
 
-def label_from_functional(func, sep="·"):
+
+def label_from_functional(func, sep="·", parity="even"):
     pos = ""
     neg = ""
     for i, o in enumerate(func):
@@ -44,11 +48,11 @@ def label_from_functional(func, sep="·"):
             pos = pos + o * (sep + str(i + 1))
         elif o < 0:
             neg = neg + (-o) * (sep + str(i + 1))
-    return pos[1:] + "_" + neg[1:]
+    return pos[1:] + "_" + neg[1:] + '_' + parity
 
 def cycle_support(label, sep = "·"):
     supp = set()
-    pos, neg = label.split("_")
+    pos, neg = label.split("_")[:2] # Ignore parity
     for i in pos.split(sep):
         supp.add(int(i))
     for i in neg.split(sep):
@@ -57,7 +61,7 @@ def cycle_support(label, sep = "·"):
 
 def functional_from_label(label, sep="·"):
     func = {}
-    pos, neg = label.split("_")
+    pos, neg = label.split("_")[:2] # Ignore parity
     for i in pos.split(sep):
         try:
             func[int(i) - 1] += 1
@@ -1326,7 +1330,7 @@ def compute_gamma_tau_ATR(phi, alpha):
     alpha_p = sigmaE(pt[x]) - K.embeddings(MM)[0](i) * sigmaE(pt[y])
     M = Matrix(MM, 2, 2, [alpha, -sigmaE(pt[b]), sigmaE(pt[c]), -alpha_p])
     iKM = K.embeddings(MM)[0]
-    # assert that M is fiexed under the action of gamma
+    # assert that M is fixed under the action of gamma
     assert gamma.apply_map(iKM) * M * gamma_p.apply_map(iKM)**-1 == sigmaE(pt[l]) * M
     tau1 = M[0][0]
     tau2 = -M[1][1]
@@ -1467,7 +1471,8 @@ def recognize(p, D, n, label, Jtau, cycle_type, char, **kwargs):
                 comments += ' Extra primes ' + str([q for q in support if q not in prime_list])
             return msg, comments
     if not skip_lindep and len(prime_list) < max_lindep_primes:
-        msg, newcomments = try_lindep(p, D, n, label, Jtau, cycle_type, char, H, hE, prime_list, ATRfield = H, timeout=300, **kwargs)
+        ATRfield = H if cycle_type == 'bigATR' else None
+        msg, newcomments = try_lindep(p, D, n, label, Jtau, cycle_type, char, H, hE, prime_list, ATRfield = ATRfield, timeout=300, **kwargs)
         fwrite(newcomments, logfile)
         comments += newcomments
         if msg != '':
@@ -1621,20 +1626,10 @@ def act_pseries(cocycle, h, Phi, level=None, lift=False):
         ans = {ky : f.change_ring(psi) for ky, f in ans.items()}
     return ans
 
-def get_p_prec(f):
-    fsp = f.split('_')
-    p = ZZ(fsp[1])
-    M = ZZ(fsp[-1].split('.')[0])
-    return p, M
-
-def get_label(f):
-    fsp = f.split('_')
-    return fsp[2] + '_' + fsp[3]
-
 def change_parity(fname):
     J = load(fname)
     J.change_parity()
-    save(J, fname.strip('.')[0] + '_odd.sobj')
+    save(J, fname.split('.')[0] + '_odd.sobj') # FIXME: this is not the correct way of naming files
     return
 
 # This command can run all of it
@@ -1655,8 +1650,6 @@ def eval_and_recognize(fname, typ = None, Dmin=1, Dmax=1000, outdir='outfiles', 
     fwrite(f'Doing cocycle {fname}...', logfile)
     if J is None:
         J = load(fname)
-    if '_odd' in fname:
-        fname = fname.replace('_odd','')
     p, M = get_p_prec(fname)        
     label = get_label(fname)
     for D in Dvalues:

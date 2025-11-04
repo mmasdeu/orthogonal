@@ -26,32 +26,35 @@ class str_or_int(SageObject):
                 return f'{x[0]}_{{{x[1]}}}'
 
     def _repr_(self):
-        return str(self.val)
+        if self.val not in ZZ:
+            return str(self.val)
+        p = ZZ(self.val)
+        if p == 1:
+            color = None
+        elif p == 2:
+            color = 'green'
+        elif p % 4 == 3:
+            color = 'blue'
+        else:
+            color = 'red'
+        if color is None:
+            return str(p)
+        else:
+            return(f'<span style="color:{color}">{p}</span>')
 
 
 def print_factorization(fact):
     f1 = [(str_or_int(b),e) for b, e in fact[1:]]
-    Jpow = fact[0][0]
-    if isinstance(Jpow, str):
-        Jpow = fact[0][1]
-    plist0 = sorted(list(set([b for b, e in fact[1:] if not isinstance(b, str)])))
-    if len(plist0) == 0:
-        plist = ['1']
-    else:
-        plist = ['[']
-        for p in plist0:
-            if p == 2:
-                color = 'green'
-            elif p % 4 == 3:
-                color = 'blue'
-            else:
-                color = 'red'
-            plist.append(f'<span style="color:{color}">{p}</span>,')
-        plist[-1] = plist[-1][:-1]
-        plist.append(']')
+    try:
+        Jpow = fact[0][0]
+        if isinstance(Jpow, str):
+            Jpow = fact[0][1]
+    except IndexError:
+        Jpow = '1'
     Jpow = f'J^{Jpow}' if Jpow != 1 else 'J'
-    return f'{Jpow} = ' + str(Factorization(f1, sort=False, simplify=False))[6:] + \
-        f' ({"".join(plist)})'
+    ans_color = f'{Jpow} = ' + str(Factorization(f1, sort=False, simplify=False)).replace('(', '').replace(')','').replace('1 * ','')
+    ans_raw = f'{Jpow} = ' + latex(Factorization(fact[1:])).replace('(', '').replace(')','').replace('1 * ','')
+    return ans_color, ans_raw
 
 def get_Dnh(ln):
     ans = list(re.search('D = (.[0-9]*) n = (.[0-9]*) hE = (.[^\.]*)...', ln).groups())
@@ -72,27 +75,30 @@ def get_poly_and_field(ln):
         vals.append(newval)
     poly, field, nrm, d, i, denom, pw, hpoly, msg = vals
     if type(pw) == list:
-        pw = print_factorization(pw)
+        pw, pw_raw = print_factorization(pw)
     if 'algdep' in ln:
         pw += ' (a)'
+        pw_raw += ' (a)'
     else: # lindep
         pw += ' (l)'
-    return poly, field, d, pw, hpoly
+        pw_raw += ' (l)'
+    return poly, field, d, pw, pw_raw, hpoly
 
 def get_header(fname):
-    fsp = (fname.split('/')[-1]).strip('.txt').split('_')[1:]
-    tp, p, lbl1, lbl2, prec = fsp
-    label = lbl1 + '_' + lbl2
+    tp, p, label, prec = get_file_data(fname)
     return f'{tp} points. p = {str(p)}, label = {str(label)}, prec = {str(prec)}'
 
 def get_file_data(fname):
     fsp = (fname.split('/')[-1]).strip('.txt').split('_')[1:]
-    tp, p, lbl1, lbl2, prec = fsp
-    label = lbl1 + '_' + lbl2
+    if len(fsp) == 5:
+        tp, p, lbl1, lbl2, prec = fsp
+        parity = 'even'
+    else:
+        tp, p, lbl1, lbl2, parity, prec = fsp
+    label = lbl1 + '_' + lbl2 + '_' + parity
     return tp, p, label, prec
 
 def make_table(fname):
-    # print(f'Processing {fname}...')
     tp, p, label, prec = get_file_data(fname)
     val = {'p': p, 'label': label, 'type': tp}
     J = '?'
@@ -117,7 +123,7 @@ def make_table(fname):
                     
                 if 'Jtau = 1' in ln:
                     v1 = deepcopy(val)
-                    v1.update({'field' : 'x', 'factor' : 'J = (1)', 'poly' : 'x - 1', 'hpoly' : '-', 'J' : '1', 'trivial' : True, 'recognized' : True, 'o(ζ)' : 1})
+                    v1.update({'field' : 'x', 'factor' : 'J = 1', 'poly' : 'x - 1', 'hpoly' : '-', 'J' : '1', 'trivial' : True, 'recognized' : True, 'o(ζ)' : 1})
                     v2 = deepcopy(v1)
                     v1['char'] = 'triv'
                     v2['char'] = 'conj'
@@ -133,24 +139,81 @@ def make_table(fname):
                     v1.update({'char' : char, 'field' : '?', 'factor' : '?', 'poly' : '?', 'hpoly' : '?', 'J' : J, 'trivial' : False, 'recognized' : False, 'o(ζ)' : '?'})
                     ds.append(v1)
             elif 'SUCCESS' in ln:
-                poly, field, d, factor, hpoly = get_poly_and_field(ln)
+                poly, field, d, factor, factor_raw, hpoly = get_poly_and_field(ln)
                 char = 'triv' if 'triv' in ln else 'conj'
                 v1 = deepcopy(val)
                 if v1['comments'] == '':
                     v1['comments'] = str(primes)
                 trivial = True if str(poly) == "x - 1" else False
-                v1.update({'char' : char, 'field' : field, 'factor' : factor, 'poly' : poly, 'hpoly' : hpoly, 'J' : J, 'trivial' : trivial, 'recognized' : True, 'o(ζ)' : d})
+                v1.update({'char' : char, 'field' : field, 'factor' : factor, 'factor_raw': factor_raw, 'poly' : poly, 'hpoly' : hpoly, 'J' : J, 'trivial' : trivial, 'recognized' : True, 'o(ζ)' : d})
                 ds.append(v1)
         ds = sorted(list(map(dict, frozenset(frozenset(i.items()) for i in ds))), key = lambda o : o['D'])
         return ds, (p, label, tp, maxD)
 
-def main(path='outfiles/'):
-    type_list = ['smallCM', 'smallRM', 'bigATR']
-    flist0 = glob.glob(path + '/*.txt')
-    flist = []
-    for typ in type_list:
-        flist.extend([f for f in flist0 if typ in f])
+def make_latex(tbl, stats, last_update=None, p=None, typ=None):
+    x = QQ['x'].gen()
+    tbl = [o for o in tbl if o['recognized'] and not o['trivial'] and 'J = 1' not in o['factor_raw']]
+    def add_dollars(o):
+        ans = {}
+        for entry in o:
+            if entry in ['p', 'D', 'n']:
+                ans[entry] = f'${latex(sage_eval(str(o[entry]), locals={"x": x}))}$'
+            elif entry in ['field', 'poly']:
+                ans[entry] = f'${latex(sage_eval(str(o[entry]), locals={"x": x}))}$'
+            elif entry == 'factor_raw':
+                ans['factor'] = f'${str(o[entry])[:-3]}$ {o[entry][-3:]}'
+            elif entry == 'factor':
+                continue
+            else:
+                ans[entry] = str(o[entry]).replace('_','\_')
+        return ans
 
+    tbl = [add_dollars(o) for o in tbl]
+    df = pd.DataFrame(tbl, dtype=pd.StringDtype())
+    if p is not None:
+        df = df[['label', 'D', 'n', 'field', 'factor']]
+        column_format = 'p{5em}p{3em}p{.5em}p{7cm}p{6cm}'
+        caption = f'Recognized points of type {typ} for p = {p}'
+        label = f'tbl:table-p{p}'
+    else:
+        df = df[['p', 'label', 'D', 'n', 'field', 'factor']]
+        column_format = 'p{1em}p{5em}p{3em}p{.5em}p{7cm}p{6cm}'
+        caption = f'Recognized points of type {typ} points for all primes'
+        label = f'tbl:table-all'
+    print(df.style.format_index(axis=1).hide(axis=0).to_latex(environment='longtable',\
+        column_format=column_format, caption=caption, label=label, hrules=True))
+    return
+
+def make_tables(path='outfiles/', typ = 'all', p=None, format='html'):
+    if typ == 'all':
+        type_list = ['smallCM', 'smallRM', 'bigATR']
+    else:
+        type_list = [typ]
+    flist0 = glob.glob(path + '/*.txt')
+    if p is not None:
+        type_list_p = [f'{t}_{p}' for t in type_list]
+    else:
+        type_list_p = type_list
+    flist = [f for f in flist0 if any(t in f for t in type_list_p)]
+    tbl = []
+    stats = []
+    for f in flist:
+        hdr = get_header(f)
+        typ = next(typ for typ in type_list if typ in hdr)
+        newtbl, newstats = make_table(f)
+        tbl.extend(newtbl)
+        stats.append(newstats)
+    tbl = sorted(tbl, key = lambda v : ZZ(v['D']))
+    last_update = time.ctime(max(os.path.getmtime(os.path.join(root, f)) for root,_,files in os.walk(path) for f in files))
+    if format == 'html':
+        make_html(tbl, stats, last_update, p, typ)
+    elif format == 'latex':
+        make_latex(tbl, stats, last_update, p, typ)
+    else:
+        raise NotImplementedError(f'Format {format} not implemented')
+
+def make_html(tbl, stats, last_update=None, p=None, typ=None):
+    df = pd.DataFrame(tbl, dtype=pd.StringDtype())    
     doc.asis('<!DOCTYPE html>')
     with tag('html'):
         with tag('head'):
@@ -169,21 +232,9 @@ def main(path='outfiles/'):
 
         doc.asis('<link rel="stylesheet" type="text/css" href="df_style.css"/>')
         with tag('body'):
-            tbl = []
-            stats = []
-            for f in flist:
-                hdr = get_header(f)
-                typ = next(typ for typ in type_list if typ in hdr)
-                newtbl, newstats = make_table(f)
-                tbl.extend(newtbl)
-                stats.append(newstats)
-            tbl = sorted(tbl, key = lambda v : ZZ(v['D']))
-            df = pd.DataFrame(tbl, dtype=pd.StringDtype())
-            
-
             line('h1', 'Tables of DGL points')
-            last_update = time.ctime(max(os.path.getmtime(os.path.join(root, f)) for root,_,files in os.walk(path) for f in files))
-            line('p', f'Last update: {last_update}')
+            if last_update is not None:
+                line('p', f'Last update: {last_update}')
             line('h2', 'Experimental observations')
             with tag('ul'):
                 line('li', 'smallCM + conj is always 1: smallCM points are always defined over Qp')
@@ -248,4 +299,4 @@ def main(path='outfiles/'):
     print((doc.getvalue()))
 
 if __name__ == "__main__":
-    fire.Fire(main)
+    fire.Fire(make_tables)
