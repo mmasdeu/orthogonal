@@ -260,10 +260,10 @@ def make_html(tbl, stats, last_update=None, p=None, typ=None):
                 line('li', f'Total unrecognized: {tot_unr}')
                 line('li', f'Total recognized (nontrivial): {tot_recog} (smallCM: {recog_smallCM}, smallRM: {recog_smallRM}, bigATR: {recog_bigATR})')
                 line('li', f'Total rows: {tot_rows}')
-                line('li', f'Largest computed computed discriminants:')
-                with tag('ul'):
-                    for p, label, typ, maxD in stats:
-                        line('li', f'For p = {p}, label = {label}, type = {typ}: {maxD}')
+                # line('li', f'Largest computed computed discriminants:')
+                # with tag('ul'):
+                #    for p, label, typ, maxD in stats:
+                #        line('li', f'For p = {p}, label = {label}, type = {typ}: {maxD}')
             line('h2', 'Column description')
             with tag('ul'):
                 line('li', 'p : prime')
