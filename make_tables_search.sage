@@ -282,9 +282,9 @@ def make_html(tbl, stats, last_update=None, p=None, typ=None):
             
             
             columns = ['p', 'label', 'D', 'n', 'type', 'char', 'trivial', 'recognized', 'field', 'factor', 'poly', 'hpoly', 'J', 'hE', 'o(ζ)', 'comments']
-            doc.asis(df.to_html(classes=['table', 'table-striped', 'table-bordered' ],
-                        table_id='dgltable', sparsify=False,
-                        escape=False, index=False,
+            doc.asis(df.to_html(classes=['table', 'table-striped', 'table-bordered' ],\
+                        table_id='dgltable', sparsify=False,\
+                        escape=False, index=False,\
                         columns=columns)[:-8]+"<tfoot>\n" + " ".join(["<th>"+ i +"</th>\n" for i in columns])+"</tr>\n  </tfoot></table>")
 
             doc.asis('''
